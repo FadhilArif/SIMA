@@ -125,7 +125,7 @@ create table if not exists item_anggaran (
  id uuid primary key default gen_random_uuid(), proker_id uuid not null references proker(id) on delete cascade,
  sumber_dana_id uuid not null references sumber_dana(id), kategori text, nama text not null,
  jumlah numeric(14,2) not null default 1 check(jumlah>0), harga_satuan bigint not null default 0 check(harga_satuan>=0),
- subtotal bigint generated always as (round(jumlah*harga_satuan)) stored
+ subtotal bigint generated always as (round(jumlah*harga_satuan)::bigint) stored
 );
 create table if not exists pencairan_dana (
  id uuid primary key default gen_random_uuid(), proker_id uuid not null references proker(id) on delete cascade,
@@ -203,29 +203,29 @@ do $$ declare t text; begin
    execute format('alter table %I enable row level security',t);
  end loop; end $$;
 
-create policy if not exists profiles_read on profiles for select using(id=auth.uid() or lihat_semua());
-create policy if not exists periode_read on periode for select using(auth.uid() is not null);
-create policy if not exists organisasi_read on organisasi for select using(id in(select org_saya()) or id in(select org_binaan()) or lihat_semua());
-create policy if not exists unit_read on unit_kerja for select using(auth.uid() is not null);
-create policy if not exists keanggotaan_read on keanggotaan for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
-create policy if not exists koordinator_read on penugasan_koordinator for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
-create policy if not exists pembimbing_read on pembimbing_organisasi for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
-create policy if not exists club_read on anggota_club for select using(organisasi_id in(select org_saya()) or lihat_semua());
-create policy if not exists proker_read on proker for select using(organisasi_id in(select org_saya()) or organisasi_id in(select org_binaan()) or lihat_semua());
-create policy if not exists proker_write on proker for all using(organisasi_id in(select pengurus_inti())) with check(organisasi_id in(select pengurus_inti()));
-create policy if not exists kolab_read on proker_kolaborator for select using(organisasi_id in(select org_saya()) or proker_id in(select id from proker where organisasi_id in(select org_saya())) or lihat_semua());
-create policy if not exists dokumen_read on dokumen for select using(organisasi_id in(select org_saya()) or organisasi_id in(select org_binaan()) or lihat_semua());
-create policy if not exists dokumen_write on dokumen for all using(organisasi_id in(select pengurus_inti())) with check(organisasi_id in(select pengurus_inti()));
-create policy if not exists sumber_read on sumber_dana for select using(auth.uid() is not null);
-create policy if not exists plafon_read on plafon_anggaran for select using(organisasi_id in(select org_saya()) or lihat_semua());
-create policy if not exists item_read on item_anggaran for select using(proker_id in(select id from proker));
-create policy if not exists item_write on item_anggaran for all using(proker_id in(select id from proker where organisasi_id in(select pengurus_inti()))) with check(proker_id in(select id from proker where organisasi_id in(select pengurus_inti())));
-create policy if not exists cair_read on pencairan_dana for select using(proker_id in(select id from proker));
-create policy if not exists realisasi_read on realisasi for select using(proker_id in(select id from proker));
-create policy if not exists versi_read on dokumen_versi for select using(dokumen_id in(select id from dokumen));
-create policy if not exists persetujuan_read on persetujuan for select using(dokumen_id in(select id from dokumen));
-create policy if not exists rapat_read on rapat for select using(dokumen_id in(select id from dokumen));
-create policy if not exists foto_read on foto_kegiatan for select using(proker_id in(select id from proker));
-create policy if not exists drive_read on tautan_drive for select using(proker_id in(select id from proker));
-create policy if not exists notif_read on notifikasi for select using(akun_id=auth.uid());
-create policy if not exists audit_read on jejak_audit for select using((select tipe from profiles where id=auth.uid()) in('admin','wakil_rektor'));
+drop policy if exists profiles_read on profiles; create policy profiles_read on profiles for select using(id=auth.uid() or lihat_semua());
+drop policy if exists periode_read on periode; create policy periode_read on periode for select using(auth.uid() is not null);
+drop policy if exists organisasi_read on organisasi; create policy organisasi_read on organisasi for select using(id in(select org_saya()) or id in(select org_binaan()) or lihat_semua());
+drop policy if exists unit_read on unit_kerja; create policy unit_read on unit_kerja for select using(auth.uid() is not null);
+drop policy if exists keanggotaan_read on keanggotaan; create policy keanggotaan_read on keanggotaan for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
+drop policy if exists koordinator_read on penugasan_koordinator; create policy koordinator_read on penugasan_koordinator for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
+drop policy if exists pembimbing_read on pembimbing_organisasi; create policy pembimbing_read on pembimbing_organisasi for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
+drop policy if exists club_read on anggota_club; create policy club_read on anggota_club for select using(organisasi_id in(select org_saya()) or lihat_semua());
+drop policy if exists proker_read on proker; create policy proker_read on proker for select using(organisasi_id in(select org_saya()) or organisasi_id in(select org_binaan()) or lihat_semua());
+drop policy if exists proker_write on proker; create policy proker_write on proker for all using(organisasi_id in(select pengurus_inti())) with check(organisasi_id in(select pengurus_inti()));
+drop policy if exists kolab_read on proker_kolaborator; create policy kolab_read on proker_kolaborator for select using(organisasi_id in(select org_saya()) or proker_id in(select id from proker where organisasi_id in(select org_saya())) or lihat_semua());
+drop policy if exists dokumen_read on dokumen; create policy dokumen_read on dokumen for select using(organisasi_id in(select org_saya()) or organisasi_id in(select org_binaan()) or lihat_semua());
+drop policy if exists dokumen_write on dokumen; create policy dokumen_write on dokumen for all using(organisasi_id in(select pengurus_inti())) with check(organisasi_id in(select pengurus_inti()));
+drop policy if exists sumber_read on sumber_dana; create policy sumber_read on sumber_dana for select using(auth.uid() is not null);
+drop policy if exists plafon_read on plafon_anggaran; create policy plafon_read on plafon_anggaran for select using(organisasi_id in(select org_saya()) or lihat_semua());
+drop policy if exists item_read on item_anggaran; create policy item_read on item_anggaran for select using(proker_id in(select id from proker));
+drop policy if exists item_write on item_anggaran; create policy item_write on item_anggaran for all using(proker_id in(select id from proker where organisasi_id in(select pengurus_inti()))) with check(proker_id in(select id from proker where organisasi_id in(select pengurus_inti())));
+drop policy if exists cair_read on pencairan_dana; create policy cair_read on pencairan_dana for select using(proker_id in(select id from proker));
+drop policy if exists realisasi_read on realisasi; create policy realisasi_read on realisasi for select using(proker_id in(select id from proker));
+drop policy if exists versi_read on dokumen_versi; create policy versi_read on dokumen_versi for select using(dokumen_id in(select id from dokumen));
+drop policy if exists persetujuan_read on persetujuan; create policy persetujuan_read on persetujuan for select using(dokumen_id in(select id from dokumen));
+drop policy if exists rapat_read on rapat; create policy rapat_read on rapat for select using(dokumen_id in(select id from dokumen));
+drop policy if exists foto_read on foto_kegiatan; create policy foto_read on foto_kegiatan for select using(proker_id in(select id from proker));
+drop policy if exists drive_read on tautan_drive; create policy drive_read on tautan_drive for select using(proker_id in(select id from proker));
+drop policy if exists notif_read on notifikasi; create policy notif_read on notifikasi for select using(akun_id=auth.uid());
+drop policy if exists audit_read on jejak_audit; create policy audit_read on jejak_audit for select using((select tipe from profiles where id=auth.uid()) in('admin','wakil_rektor'));
