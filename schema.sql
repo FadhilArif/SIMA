@@ -229,3 +229,40 @@ drop policy if exists foto_read on foto_kegiatan; create policy foto_read on fot
 drop policy if exists drive_read on tautan_drive; create policy drive_read on tautan_drive for select using(proker_id in(select id from proker));
 drop policy if exists notif_read on notifikasi; create policy notif_read on notifikasi for select using(akun_id=auth.uid());
 drop policy if exists audit_read on jejak_audit; create policy audit_read on jejak_audit for select using((select tipe from profiles where id=auth.uid()) in('admin','wakil_rektor'));
+
+
+-- Integrasi teknis Edge Functions
+alter table admin_operator add column if not exists email text;
+create table if not exists admin_otp (
+  id uuid primary key default gen_random_uuid(),
+  admin_akun_id uuid not null references profiles(id) on delete cascade,
+  operator_id uuid not null references admin_operator(id) on delete cascade,
+  code_hash text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table admin_otp enable row level security;
+drop policy if exists admin_otp_read on admin_otp;
+create policy admin_otp_read on admin_otp for select using(admin_akun_id=auth.uid());
+
+-- Thumbnail foto: private bucket, upload hanya ke folder milik akun yang sedang login.
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('sima-thumbnails','sima-thumbnails',false,2097152,array['image/webp','image/jpeg','image/png'])
+on conflict(id) do update set public=false,file_size_limit=2097152,allowed_mime_types=excluded.allowed_mime_types;
+
+drop policy if exists sima_thumb_insert on storage.objects;
+create policy sima_thumb_insert on storage.objects
+for insert to authenticated
+with check(
+  bucket_id='sima-thumbnails'
+  and (storage.foldername(name))[1]=auth.uid()::text
+);
+
+drop policy if exists sima_thumb_delete on storage.objects;
+create policy sima_thumb_delete on storage.objects
+for delete to authenticated
+using(
+  bucket_id='sima-thumbnails'
+  and (storage.foldername(name))[1]=auth.uid()::text
+);
