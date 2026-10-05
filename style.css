@@ -26,3 +26,24 @@ table{width:100%;border-collapse:collapse}th{font-size:12px;color:var(--mu);text
 .bn{display:flex;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--ln);justify-content:space-around;padding:8px 0}.bn button{border:0;background:none;color:var(--mu);font-size:11px}.bn .on{color:var(--p);font-weight:700}.bn .fab{background:var(--p);color:#fff;width:44px;height:44px;border-radius:50%;font-size:22px;margin-top:-18px}
 table,thead,tbody,tr,td{display:block}thead{display:none}tr{border-bottom:1px solid var(--ln);padding:6px 0}td{border:0;padding:2px 4px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.btn.s{background:#fff;color:var(--ink);border:1px solid var(--ln)}
+.btn.small{padding:7px 10px;font-size:12px}
+@media(max-width:820px){
+  table,thead,tbody,tr,td{display:block}
+  thead{display:none}
+  tr[data-id]{background:#fff;border:1px solid var(--ln);border-radius:12px;padding:10px;margin:8px 0}
+  tr[data-id] td{display:flex;justify-content:space-between;gap:12px;border:0;padding:4px 2px}
+  tr[data-id] td:before{font-size:10px;font-weight:700;color:var(--mu);content:""}
+  tr[data-id] td:nth-child(1):before{content:"Proker"}
+  tr[data-id] td:nth-child(2):before{content:"Jenis"}
+  tr[data-id] td:nth-child(3):before{content:"Jadwal"}
+  tr[data-id] td:nth-child(4):before{content:"Diajukan"}
+  tr[data-id] td:nth-child(5):before{content:"Cair"}
+  tr[data-id] td:nth-child(6):before{content:"Status"}
+  tr[data-id] td:first-child{display:block}
+  tr[data-id] td:first-child:before{display:block}
+  .bar2{flex-direction:column}
+  .bar2 .btn{width:100%}
+  .peserta{grid-template-columns:1fr 110px 32px}
+}
