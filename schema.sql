@@ -1,5 +1,5 @@
 -- SIMA MHS v2.0
--- 27 tabel + helper RLS. Jalankan di Supabase TEST terlebih dahulu.
+-- 27 tabel rancangan + tabel teknis admin_otp, helper RLS, dan bucket thumbnail. Jalankan di Supabase TEST terlebih dahulu.
 create extension if not exists pgcrypto;
 
 create table if not exists periode (
