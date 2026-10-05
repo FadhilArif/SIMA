@@ -1,7 +1,7 @@
 // Isi dari Supabase: Project Settings > API. Kosong = mode demo.
-const SUPABASE_URL = 'httos://vgzhkvxzzvllmricfzto.supabase.co', SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnemhrdnh6enZsbG1yaWNmenRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzQxNjAsImV4cCI6MjEwNjc1MDE2MH0.iVvnXgFfYimUuFytlHQBM4OXDyVGirWY_eReM-8Dm34';
+const SUPABASE_URL = 'https://vgzhkvxzzvllmricfzto.supabase.co', SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnemhrdnh6enZsbG1yaWNmenRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzQxNjAsImV4cCI6MjEwNjc1MDE2MH0.iVvnXgFfYimUuFytlHQBM4OXDyVGirWY_eReM-8Dm34';
 const sb = SUPABASE_URL && window.supabase ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-const $ = s => document.querySelector(s), rp = n => 'Rp' + Number(n || 0).toLocaleString('id-ID');
+const $ = s => document.querySelector(s), $ = (s,r=document) => [...r.querySelectorAll(s)], rp = n => 'Rp' + Number(n || 0).toLocaleString('id-ID'), esc = v => String(v ?? '').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]));
 const ST = { draft:['Draft',''], proposal_diajukan:['Menunggu review','wa'], revisi:['Revisi','er'], disetujui:['Disetujui','ok'], berjalan:['Berjalan','ok'], selesai:['Selesai','bl'], tidak_terlaksana:['Tidak terlaksana','er'] };
 const S = { user:{ nama:'Fadhli Arif', email:'fadhli@stikesmhk.ac.id' }, ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
   ctxs:[{ org:'HIMIKA', peran:'Ketua · 2026/2027', review:false }, { org:'Koordinator RACANA', peran:'Review', review:true }],
@@ -17,10 +17,10 @@ const MENU = [['Utama',[['beranda','Beranda'],['proker','Proker'],['undangan','U
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
 async function loadProker() {
   if (!sb) return;
-  const { data, error } = await sb.from('proker').select('id,nama,ketua_pelaksana,pengajuan,tanggal_mulai,status,item_anggaran(subtotal),pencairan_dana(jumlah)').order('tanggal_mulai');
+  let q = sb.from('proker').select('id,nama,ketua_pelaksana,pengajuan,tanggal_mulai,tanggal_selesai,status,organisasi_id,item_anggaran(subtotal),pencairan_dana(jumlah)').order('tanggal_mulai'); if (S.orgId) q=q.eq('organisasi_id',S.orgId); const { data, error } = await q;
   if (error) return toast('Gagal memuat proker: ' + error.message);
-  S.proker = data.map(p => ({ id:p.id, nama:p.nama, ketua:p.ketua_pelaksana, jenis:p.pengajuan, mulai:p.tanggal_mulai, status:p.status === 'proposal_diajukan' ? p.status : p.status,
-    ajuan:p.item_anggaran.reduce((a, i) => a + i.subtotal, 0), cair:p.pencairan_dana.reduce((a, i) => a + i.jumlah, 0) }));
+  S.proker = (data || []).map(p => ({ id:p.id, nama:p.nama, ketua:p.ketua_pelaksana, jenis:p.pengajuan, mulai:p.tanggal_mulai, selesai:p.tanggal_selesai, organisasi_id:p.organisasi_id, status:p.status,
+    ajuan:(p.item_anggaran || []).reduce((a, i) => a + Number(i.subtotal || 0), 0), cair:(p.pencairan_dana || []).reduce((a, i) => a + Number(i.jumlah || 0), 0) }));
 }
 const chip = s => { const [t, c] = ST[s] || [s, '']; return `<span class="chip ${c}">${t}</span>`; };
 
@@ -42,7 +42,7 @@ const V = {
     <div class="bar2"><input id="q" placeholder="Cari proker atau ketua" value="${S.q}"><button class="btn" data-go="form">+ Buat proker</button></div>
     <div class="tabs">${tabs.map(([k, t]) => `<button class="${S.tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('')}</div>
     <div class="card"><table><thead><tr><th>Nama program kerja</th><th>Jenis</th><th>Jadwal</th><th>Diajukan</th><th>Cair</th><th>Status</th></tr></thead><tbody>
-    ${f.map(p => `<tr data-id="${p.id}" data-go="review"><td><b>${p.nama}</b><br><small>Ketua: ${p.ketua || '-'}</small></td><td>${p.jenis === 'kolaboratif' ? '<span class="chip pu">Kolaboratif</span>' : '<span class="chip">Mandiri</span>'}</td><td>${p.mulai}</td><td>${rp(p.ajuan)}</td><td>${rp(p.cair)}</td><td>${chip(p.status)}</td></tr>`).join('') || '<tr><td colspan="6">Belum ada proker pada filter ini. Buat proker baru untuk memulai.</td></tr>'}</tbody></table></div>`;
+    ${f.map(p => `<tr data-id="${p.id}" data-go="detail"><td><b>${p.nama}</b><br><small>Ketua: ${p.ketua || '-'}</small></td><td>${p.jenis === 'kolaboratif' ? '<span class="chip pu">Kolaboratif</span>' : '<span class="chip">Mandiri</span>'}</td><td>${p.mulai}</td><td>${rp(p.ajuan)}</td><td>${rp(p.cair)}</td><td>${chip(p.status)}</td></tr>`).join('') || '<tr><td colspan="6">Belum ada proker pada filter ini. Buat proker baru untuk memulai.</td></tr>'}</tbody></table></div>`;
   },
   form: () => `<h1 class="t">Form proposal program kerja</h1><p class="sub">Lengkapi data kegiatan, anggaran, dan dokumen proposal.</p>
   <div class="step"><span class="on">Data kegiatan</span><span>Anggaran</span><span>Dokumen</span><span>Pengajuan</span></div>
@@ -78,15 +78,15 @@ document.addEventListener('click', async e => {
     const k = $('#kk').value.trim();
     if (act.dataset.act === 'revisi' && !k) return $('#ke').textContent = 'Komentar wajib diisi saat meminta revisi.';
     $('#ke').textContent = '';
-    if (sb) { const { error } = await sb.from('persetujuan').insert({ dokumen_id:S.dokId, tahap:'koordinator', keputusan:act.dataset.act, komentar:k }); if (error) return toast(error.message); }
+    if (sb && S.dokId) { const { error } = await sb.rpc('proses_persetujuan',{p_dokumen:S.dokId,p_keputusan:act.dataset.act,p_komentar:k}); if (error) return toast(error.message); }
     toast({ revisi:'Dokumen dikembalikan untuk revisi', teruskan:'Diteruskan ke tahap berikutnya', setuju:'Dokumen disetujui' }[act.dataset.act]); S.view = 'inbox'; render();
   }
 });
 document.addEventListener('input', e => { if (e.target.id === 'q') { S.q = e.target.value; render(); $('#q').focus(); } if (e.target.closest('#kb')) hitung(); });
-document.addEventListener('change', e => { if (e.target.name === 'pengajuan') $('#kb').hidden = e.target.value !== 'kolaboratif'; if (e.target.id === 'cx') { S.ctx = +e.target.value; render(); } });
+document.addEventListener('change', e => { if (e.target.name === 'pengajuan') $('#kb').hidden = e.target.value !== 'kolaboratif'; if (e.target.id === 'cx') { S.ctx = +e.target.value; S.orgId = S.ctxs[S.ctx]?.org_id || null; loadProker().then(render); } });
 document.addEventListener('submit', async e => {
   if (e.target.id === 'fl') { e.preventDefault();
-    if (sb) { const { error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; await loadProker(); }
+    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user=data.user; await loadMembershipContext(); await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; render(); }
   if (e.target.id === 'ff') { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), kolab = f.pengajuan === 'kolaboratif', er = [];
     if (!f.nama) er.push('Nama program kerja wajib diisi'); if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi'); if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai'); if (!f.tempat) er.push('Lokasi wajib diisi');
@@ -95,4 +95,30 @@ document.addEventListener('submit', async e => {
     if (sb) { const { error } = await sb.from('proker').insert({ organisasi_id:S.orgId, nama:f.nama, jenis:f.jenis, tanggal_mulai:f.mulai, tanggal_selesai:f.selesai, tempat:f.tempat, deskripsi:f.deskripsi, pengajuan:f.pengajuan }); if (error) return toast(error.message); await loadProker(); }
     else S.proker.unshift({ id:Date.now(), nama:f.nama, ketua:S.user.nama, jenis:f.pengajuan, mulai:f.mulai, ajuan:0, cair:0, status:'draft' });
     toast('Draft proker tersimpan'); S.view = 'proker'; render(); }
+});
+
+async function loadMembershipContext(){
+  if(!sb||!S.user){S.orgId=null;return}
+  const {data,error}=await sb.from('keanggotaan').select('organisasi_id,jabatan,organisasi:organisasi_id(id,nama,periode:periode_id(nama))').eq('akun_id',S.user.id).eq('status','aktif');
+  if(error||!data?.length)return;
+  S.ctxs=data.map(x=>({org_id:x.organisasi_id,org:x.organisasi?.nama||'Organisasi',peran:x.jabatan||'Anggota',periode:x.organisasi?.periode?.nama||'',review:false}));
+  S.orgId=S.ctxs[0]?.org_id||null;
+}
+Object.assign(V,{
+ detail:()=>{const p=S.selected||S.proker[0];if(!p)return stub('Detail proker');return '<h1 class="t">'+esc(p.nama)+'</h1><p class="sub">'+esc(currentContext().org)+' · '+(p.jenis==='kolaboratif'?'Kolaboratif':'Mandiri')+'</p><div class="row2"><div><div class="card"><h3>Status</h3><p>'+chip(p.status)+'</p><p>Tanggal: <b>'+esc(p.mulai||'-')+'</b> s/d <b>'+esc(p.selesai||'-')+'</b></p><p>Ketua: <b>'+esc(p.ketua||'-')+'</b></p></div><div class="card"><h3>Dokumen</h3><p>Proposal <span class="chip bl">Versi terbaru</span></p><p>LPJ <span class="chip">Belum diajukan</span></p></div></div><div><div class="card"><h3>Anggaran</h3><p>Diajukan <b>'+rp(p.ajuan)+'</b></p><p>Cair <b>'+rp(p.cair)+'</b></p><button class="btn w" data-go="plafon">Lihat anggaran</button></div><div class="card"><h3>Aksi</h3><button class="btn w" data-go="review">Buka review</button><button class="btn s" data-go="lpj">Form LPJ</button></div></div></div>'},
+ lpj:()=>'<h1 class="t">Form LPJ</h1><p class="sub">Realisasi, dokumen, foto kegiatan, dan sertifikat.</p><div class="card"><div class="step"><span class="on">1. Realisasi</span><span>2. Foto</span><span>3. Pengajuan</span></div><label>Realisasi kegiatan *</label><textarea id="lpj-real" rows="5" placeholder="Jelaskan realisasi kegiatan..."></textarea><label>PDF LPJ *</label><input type="file" id="lpj-pdf" accept="application/pdf"><small>PDF maksimal 29 MB.</small><label>Foto kegiatan * (1–10 foto)</label><input id="lpj-photo" type="file" accept="image/jpeg,image/png,image/webp" multiple><small>Setiap foto maksimal 10 MB.</small><label>Tautan sertifikat (opsional)</label><input id="lpj-drive" placeholder="https://drive.google.com/..."><p class="err" id="lpj-error"></p><button class="btn" id="submit-lpj" type="button">Ajukan LPJ</button></div>',
+ undangan:()=>'<h1 class="t">Undangan kolaborasi</h1><p class="sub">Konfirmasi proker kolaboratif yang melibatkan organisasi Anda.</p><div class="card"><div class="list-item"><div class="item-main"><b>Seminar Gizi dan Kesehatan</b><small>UKM · Porsi plafon Rp5.000.000</small></div><button class="btn d small" data-invite="tolak">Tolak</button><button class="btn small" data-invite="terima">Terima</button></div></div>',
+ laporan:()=>stub('Laporan akhir'),
+ struktur:()=>stub('Struktur dan anggota'),
+ rapat:()=>stub('Rapat'),
+ plafon:()=>'<h1 class="t">Plafon dan anggaran</h1><p class="sub">Pantau plafon, pengajuan, cair, dan sisa.</p><div class="card"><h3>'+esc(currentContext().org)+'</h3><p>Plafon <b>Rp75.000.000</b></p><p>Diajukan <b>Rp48.600.000</b></p><p>Cair <b>Rp31.200.000</b></p><p>Sisa <b>Rp43.800.000</b></p><div class="bar"><i style="width:42%"></i></div></div>',
+ cair:()=>stub('Pencairan dan verifikasi'),
+ periode:()=>stub('Periode'),
+ akun:()=>stub('Akun dan penetapan'),
+ audit:()=>stub('Jejak audit')
+});
+document.addEventListener('click',async e=>{
+ const row=e.target.closest('[data-id]');
+ if(row && row.dataset.go){S.selected=S.proker.find(p=>String(p.id)===String(row.dataset.id))||S.selected;if(row.dataset.go==='detail')S.view='detail';else if(row.dataset.go==='review')S.view='review';render();return}
+ if(e.target.id==='submit-lpj'){const err=$('#lpj-error'),files=$('#lpj-photo')?.files||[];err.textContent='';if(files.length<1||files.length>10){err.textContent='LPJ wajib memiliki 1 sampai 10 foto.';return}if([...files].some(f=>f.size>10*1024*1024)){err.textContent='Setiap foto maksimal 10 MB.';return}const pdf=$('#lpj-pdf')?.files?.[0];if(!pdf){err.textContent='PDF LPJ wajib diunggah.';return}if(pdf.size>29*1024*1024){err.textContent='PDF melebihi batas 29 MB.';return}toast('Validasi LPJ lolos. Upload Drive akan diproses Edge Function.');return}
 });
