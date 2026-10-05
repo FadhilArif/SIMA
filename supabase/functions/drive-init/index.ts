@@ -15,7 +15,7 @@ export default {
       if (kind === "photo" && (!["image/jpeg","image/png","image/webp"].includes(mime) || size > PHOTO_MAX)) return json({ error: "Foto harus JPG/PNG/WebP dan <= 10 MB." }, 400);
       if (!["document","photo"].includes(kind)) return json({ error: "Jenis upload tidak valid." }, 400);
 
-      const { data: p, error: pe } = await ctx.supabaseAdmin.from("proker").select("id,nama,organisasi_id,periode:organisasi_id(periode_id,organisasi:periode_id(nama))").eq("id", proker_id).maybeSingle();
+      const { data: p, error: pe } = await ctx.supabaseAdmin.from("proker").select("id,nama,organisasi_id").eq("id", proker_id).maybeSingle();
       if (pe || !p) return json({ error: "Proker tidak ditemukan." }, 404);
 
       const { data: member } = await ctx.supabaseAdmin.from("keanggotaan").select("id,jabatan").eq("akun_id", ctx.user.id).eq("organisasi_id", p.organisasi_id).eq("status","aktif").maybeSingle();
