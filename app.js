@@ -88,7 +88,7 @@ document.addEventListener('change', e => { if (e.target.name === 'pengajuan') $(
 document.addEventListener('submit', async e => {
   if (e.target.id === 'fl') { e.preventDefault();
     if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user=data.user; await loadMembershipContext(); await loadProker(); }
-    $('#login').hidden = true; $('#app').hidden = false; render(); }
+    $('#login').hidden = true; $('#app').hidden = false; if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), kolab = f.pengajuan === 'kolaboratif', er = [];
     if (!f.nama) er.push('Nama program kerja wajib diisi'); if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi'); if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai'); if (!f.tempat) er.push('Lokasi wajib diisi');
     if (kolab && !document.querySelector('.peserta input').value) er.push('Tambahkan minimal satu organisasi peserta'); if (kolab && !hitung()) er.push('Total porsi peserta melebihi dana kampus proker');
@@ -97,6 +97,12 @@ document.addEventListener('submit', async e => {
     else S.proker.unshift({ id:Date.now(), nama:f.nama, ketua:S.user.nama, jenis:f.pengajuan, mulai:f.mulai, ajuan:0, cair:0, status:'draft' });
     toast('Draft proker tersimpan'); S.view = 'proker'; render(); }
 });
+
+
+async function invokeFn(name,body){if(!sb)throw new Error('Supabase belum dikonfigurasi.');const {data,error}=await sb.functions.invoke(name,{body});if(error)throw error;if(data?.error)throw new Error(data.error);return data;}
+async function uploadDriveFile({proker_id,dokumen_id,kind,file,urutan=1,thumb_path=null}){const init=await invokeFn('drive-init',{proker_id,dokumen_id,kind,filename:file.name,mime:file.type,size:file.size});const put=await fetch(init.upload_url,{method:'PUT',headers:{'Content-Type':file.type,'Content-Length':String(file.size)},body:file});if(!put.ok)throw new Error('Upload Google Drive gagal ('+put.status+').');let driveFile={};try{driveFile=await put.json();}catch(_){}if(!driveFile.id){const loc=put.headers.get('Location');if(loc)driveFile.id=loc.split('/').pop();}if(!driveFile.id)throw new Error('Google Drive tidak mengembalikan file id.');return invokeFn('drive-complete',{proker_id,dokumen_id,kind,drive_file_id:driveFile.id,urutan,thumb_path});}
+async function makeThumbnail(file){const img=new Image(),url=URL.createObjectURL(file);try{await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url;});const max=400,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);return await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',0.82));}finally{URL.revokeObjectURL(url);}}
+async function uploadThumb(file,prokerId){const blob=await makeThumbnail(file);if(!blob)throw new Error('Gagal membuat thumbnail.');const path=S.user.id+'/'+prokerId+'/'+crypto.randomUUID()+'.webp';const {error}=await sb.storage.from('sima-thumbnails').upload(path,blob,{contentType:'image/webp',upsert:false});if(error)throw error;return path;}
 
 async function loadMembershipContext(){
   if(!sb||!S.user){S.orgId=null;return}
@@ -115,11 +121,35 @@ Object.assign(V,{
  plafon:()=>'<h1 class="t">Plafon dan anggaran</h1><p class="sub">Pantau plafon, pengajuan, cair, dan sisa.</p><div class="card"><h3>'+esc(currentContext().org)+'</h3><p>Plafon <b>Rp75.000.000</b></p><p>Diajukan <b>Rp48.600.000</b></p><p>Cair <b>Rp31.200.000</b></p><p>Sisa <b>Rp43.800.000</b></p><div class="bar"><i style="width:42%"></i></div></div>',
  cair:()=>stub('Pencairan dan verifikasi'),
  periode:()=>stub('Periode'),
- akun:()=>stub('Akun dan penetapan'),
- audit:()=>stub('Jejak audit')
+ akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Impor anggota dan verifikasi OTP Admin.</p><div class="row2"><div class="card"><h3>Impor CSV anggota</h3><p class="sub">Minimal: nama/full_name dan email. Opsional: nim, jabatan, unit_nama.</p><input id="csv-file" type="file" accept=".csv,text/csv"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="csv-preview" type="button">Pratinjau CSV</button><button class="btn s" id="csv-commit" type="button" disabled>Konfirmasi impor</button></div><p id="csv-result" class="sub"></p></div><div class="card"><h3>OTP Admin</h3><label>Email pribadi operator</label><input id="otp-email" type="email" placeholder="operator@contoh.ac.id"><button class="btn w" id="otp-request" type="button">Kirim OTP</button><label style="margin-top:12px">Kode OTP</label><input id="otp-code" inputmode="numeric" maxlength="6" placeholder="6 digit"><button class="btn" id="otp-verify" type="button">Verifikasi OTP</button><p id="otp-result" class="sub"></p></div></div>',
+ audit:()=>stub('Jejak audit'),
+ 'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
  const row=e.target.closest('[data-id]');
  if(row && row.dataset.go){S.selected=S.proker.find(p=>String(p.id)===String(row.dataset.id))||S.selected;if(row.dataset.go==='detail')S.view='detail';else if(row.dataset.go==='review')S.view='review';render();return}
- if(e.target.id==='submit-lpj'){const err=$('#lpj-error'),files=$('#lpj-photo')?.files||[];err.textContent='';if(files.length<1||files.length>10){err.textContent='LPJ wajib memiliki 1 sampai 10 foto.';return}if([...files].some(f=>f.size>10*1024*1024)){err.textContent='Setiap foto maksimal 10 MB.';return}const pdf=$('#lpj-pdf')?.files?.[0];if(!pdf){err.textContent='PDF LPJ wajib diunggah.';return}if(pdf.size>29*1024*1024){err.textContent='PDF melebihi batas 29 MB.';return}toast('Validasi LPJ lolos. Upload Drive akan diproses Edge Function.');return}
+ if(e.target.id==='submit-lpj'){
+ const err=$('#lpj-error'),files=[...($('#lpj-photo')?.files||[])],pdf=$('#lpj-pdf')?.files?.[0],p=S.selected;err.textContent='';
+ if(!p?.id){err.textContent='Pilih proker terlebih dahulu.';return}
+ if(files.length<1||files.length>10){err.textContent='LPJ wajib memiliki 1 sampai 10 foto.';return}
+ if(files.some(f=>f.size>10*1024*1024)){err.textContent='Setiap foto maksimal 10 MB.';return}
+ if(!pdf){err.textContent='PDF LPJ wajib diunggah.';return}
+ if(pdf.size>29*1024*1024){err.textContent='PDF melebihi batas 29 MB.';return}
+ const btn=e.target;btn.disabled=true;btn.textContent='Mengunggah...';
+ try{let {data:dok,error:de}=await sb.from('dokumen').select('id,status').eq('proker_id',p.id).eq('jenis','lpj').maybeSingle();if(de)throw de;if(!dok){const ins=await sb.from('dokumen').insert({organisasi_id:p.organisasi_id,proker_id:p.id,jenis:'lpj',status:'draft',tahap_saat_ini:'menteri'}).select().single();if(ins.error)throw ins.error;dok=ins.data;}
+ await uploadDriveFile({proker_id:p.id,dokumen_id:dok.id,kind:'document',file:pdf});
+ for(let i=0;i<files.length;i++){const thumb=await uploadThumb(files[i],p.id);await uploadDriveFile({proker_id:p.id,dokumen_id:dok.id,kind:'photo',file:files[i],urutan:i+1,thumb_path:thumb});}
+ const cert=$('#lpj-drive')?.value.trim();if(cert){if(!/^https:\/\/(drive\.google\.com|docs\.google\.com)\//.test(cert))throw new Error('Tautan sertifikat harus dari Google Drive atau Google Docs.');const {error:te}=await sb.from('tautan_drive').insert({proker_id:p.id,jenis:'sertifikat',url:cert,keterangan:'Sertifikat LPJ'});if(te)throw te;}
+ const {error:ue}=await sb.from('dokumen').update({status:'diajukan'}).eq('id',dok.id);if(ue)throw ue;toast('LPJ dan seluruh berkas berhasil diunggah.');S.view='detail';render();
+ }catch(ex){err.textContent=ex.message||String(ex);}finally{btn.disabled=false;btn.textContent='Ajukan LPJ';}return;
+});
+
+document.addEventListener('click',async e=>{
+ if(e.target.id==='csv-preview'){const file=$('#csv-file')?.files?.[0],out=$('#csv-result');if(!file){out.textContent='Pilih file CSV.';return}try{const r=await invokeFn('import-csv',{action:'preview',organisasi_id:S.orgId,nama_file:file.name,csv:await file.text()});S.importId=r.impor_id;$('#csv-commit').disabled=false;out.textContent='Preview: '+r.valid+' valid dari '+r.total+' baris.';}catch(ex){out.textContent=ex.message||String(ex);}return;}
+ if(e.target.id==='csv-commit'){if(!S.importId)return;const out=$('#csv-result');e.target.disabled=true;try{const r=await invokeFn('import-csv',{action:'commit',organisasi_id:S.orgId,impor_id:S.importId});out.textContent='Impor selesai: '+r.created+' akun dibuat, '+r.skipped+' dilewati.';toast('Impor CSV selesai.');}catch(ex){out.textContent=ex.message||String(ex);e.target.disabled=false;}return;}
+ if(e.target.id==='otp-request'){try{const r=await invokeFn('admin-otp',{action:'request',email:$('#otp-email').value.trim()});$('#otp-result').textContent='OTP dikirim sampai '+new Date(r.expires_at).toLocaleTimeString('id-ID')+'.';}catch(ex){$('#otp-result').textContent=ex.message||String(ex);}return;}
+ if(e.target.id==='otp-verify'){try{await invokeFn('admin-otp',{action:'verify',email:$('#otp-email').value.trim(),code:$('#otp-code').value.trim()});$('#otp-result').textContent='OTP valid. Aktivitas Admin terverifikasi.';toast('OTP Admin berhasil diverifikasi.');}catch(ex){$('#otp-result').textContent=ex.message||String(ex);}return;}
+});
+document.addEventListener('submit',async e=>{
+ if(e.target.id==='cp'){e.preventDefault();const a=$('#newpw').value,b=$('#newpw2').value,er=$('#cpe');er.textContent='';if(a.length<8)return er.textContent='Kata sandi minimal 8 karakter.';if(a!==b)return er.textContent='Konfirmasi kata sandi tidak sama.';const {error}=await sb.auth.updateUser({password:a,user_metadata:{...S.user.user_metadata,must_change_password:false}});if(error)return er.textContent=error.message;S.user.user_metadata={...S.user.user_metadata,must_change_password:false};toast('Kata sandi berhasil diganti.');S.view='beranda';render();}
 });
