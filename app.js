@@ -1,7 +1,7 @@
 // Isi dari Supabase: Project Settings > API. Kosong = mode demo.
 const SUPABASE_URL = 'https://vgzhkvxzzvllmricfzto.supabase.co', SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnemhrdnh6enZsbG1yaWNmenRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzQxNjAsImV4cCI6MjEwNjc1MDE2MH0.iVvnXgFfYimUuFytlHQBM4OXDyVGirWY_eReM-8Dm34';
 const sb = SUPABASE_URL && window.supabase ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-const $ = s => document.querySelector(s), $ = (s,r=document) => [...r.querySelectorAll(s)], rp = n => 'Rp' + Number(n || 0).toLocaleString('id-ID'), esc = v => String(v ?? '').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]));
+const $ = s => document.querySelector(s), $$ = (s,r=document) => [...r.querySelectorAll(s)], rp = n => 'Rp' + Number(n || 0).toLocaleString('id-ID'), esc = v => String(v ?? '').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]));
 const ST = { draft:['Draft',''], proposal_diajukan:['Menunggu review','wa'], revisi:['Revisi','er'], disetujui:['Disetujui','ok'], berjalan:['Berjalan','ok'], selesai:['Selesai','bl'], tidak_terlaksana:['Tidak terlaksana','er'] };
 function currentContext(){ return S.ctxs[S.ctx] || S.ctxs[0] || {org:'Organisasi',peran:'Pengguna'}; }\nconst S = { user:{ nama:'Fadhli Arif', email:'fadhli@stikesmhk.ac.id' }, ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
   ctxs:[{ org:'HIMIKA', peran:'Ketua · 2026/2027', review:false }, { org:'Koordinator RACANA', peran:'Review', review:true }],
