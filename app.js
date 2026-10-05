@@ -29,7 +29,7 @@ function renderShell() {
   $('#nav').innerHTML = MENU.map(([g, it]) => `<div class="grp">${g}</div>` + it.map(([k, t]) => `<button class="nav ${S.view === k ? 'on' : ''}" data-go="${k}">${t}</button>`).join('')).join('');
   $('#bn').innerHTML = [['beranda','Beranda'],['proker','Proker'],['form','+'],['inbox','Review'],['galeri','Galeri']].map(([k, t]) => `<button class="${k === 'form' ? 'fab' : S.view === k ? 'on' : ''}" data-go="${k}" aria-label="${t}">${t}</button>`).join('');
   $('#cx').innerHTML = S.ctxs.map((c, i) => `<option value="${i}" ${i === S.ctx ? 'selected' : ''}>${c.org} · ${c.peran}</option>`).join('');
-  $('#av').textContent = S.user.nama.split(' ').map(w => w[0]).join('');
+  const displayName = S.user?.user_metadata?.nama || S.user?.user_metadata?.name || S.user?.email || 'User'; $('#av').textContent = displayName.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
 }
 const V = {
   beranda: () => `<h1 class="t">Beranda</h1><p class="sub">Ringkasan aktivitas dari semua konteks Anda.</p>
@@ -87,7 +87,7 @@ document.addEventListener('input', e => { if (e.target.id === 'q') { S.q = e.tar
 document.addEventListener('change', e => { if (e.target.name === 'pengajuan') $('#kb').hidden = e.target.value !== 'kolaboratif'; if (e.target.id === 'cx') { S.ctx = +e.target.value; S.orgId = S.ctxs[S.ctx]?.org_id || null; loadProker().then(render); } });
 document.addEventListener('submit', async e => {
   if (e.target.id === 'fl') { e.preventDefault();
-    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user=data.user; await loadMembershipContext(); await loadProker(); }
+    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; await loadMembershipContext(); await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), kolab = f.pengajuan === 'kolaboratif', er = [];
     if (!f.nama) er.push('Nama program kerja wajib diisi'); if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi'); if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai'); if (!f.tempat) er.push('Lokasi wajib diisi');
