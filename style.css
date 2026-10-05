@@ -47,3 +47,24 @@ table,thead,tbody,tr,td{display:block}thead{display:none}tr{border-bottom:1px so
   .bar2 .btn{width:100%}
   .peserta{grid-template-columns:1fr 110px 32px}
 }
+
+/* Mobile/tablet hardening: prevent desktop split layout on narrow Android browser viewports. */
+@media(max-width:1100px){
+  #login{grid-template-columns:1fr;min-height:100dvh}
+  #login .hero{display:none}
+  #app{grid-template-columns:1fr;min-height:100dvh}
+  #app aside{display:none}
+  main{padding:14px 14px 90px;width:100%}
+  .bn{display:flex}
+  .top{margin-bottom:14px}
+  .ctx{min-width:0;max-width:75vw}
+  .ctx span{display:none}
+  .row2,.f2{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .box{max-width:calc(100vw - 28px);padding:20px}
+  h1.t{font-size:21px}
+  .g3{grid-template-columns:1fr}
+  .bar2{flex-direction:column}
+  .bar2 .btn{width:100%}
+}
