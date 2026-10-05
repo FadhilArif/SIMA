@@ -33,7 +33,7 @@ Template aman ada di `supabase/functions/.env.example`.
 1. Buat Google Cloud project dan aktifkan Google Drive API.
 2. Buat Service Account.
 3. Buat satu folder root di Drive institusi.
-4. Share folder root tersebut ke email Service Account sebagai Editor.
+4. **Disarankan:** gunakan Shared Drive institusi dan beri Service Account akses yang diperlukan. Service Account tidak memiliki kuota penyimpanan Drive pribadi. Alternatif untuk Google Workspace adalah memakai delegasi domain dan isi `GOOGLE_SUBJECT` dengan email akun institusi.
 5. Simpan email Service Account, private key, dan folder ID sebagai Edge Function secrets.
 6. Function akan membuat struktur: **Periode / Organisasi / Proker / Dokumen|Foto**.
 7. Browser meminta sesi resumable upload ke Edge Function lalu mengunggah langsung ke Drive; metadata disimpan di Supabase.
