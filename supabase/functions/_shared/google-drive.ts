@@ -28,6 +28,7 @@ async function accessToken() {
   const header = textB64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const claim = textB64url(JSON.stringify({
     iss: email,
+    sub: Deno.env.get("GOOGLE_SUBJECT") || undefined,
     scope: "https://www.googleapis.com/auth/drive",
     aud: "https://oauth2.googleapis.com/token",
     iat: now,
@@ -86,11 +87,13 @@ export async function findOrCreateFolder(name: string, parentId?: string) {
     pageSize: "10",
     fields: "files(id,name)",
     spaces: "drive",
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
   }));
   const found = await list.json();
   if (found.files?.[0]) return found.files[0].id;
 
-  const created = await driveFetch("/files", {
+  const created = await driveFetch("/files?supportsAllDrives=true", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -133,6 +136,7 @@ export async function createResumableUpload(meta: { name: string; mimeType: stri
 export async function getDriveFile(fileId: string) {
   const res = await driveFetch("/files/" + encodeURIComponent(fileId) + "?" + new URLSearchParams({
     fields: "id,name,mimeType,size,parents,webViewLink,md5Checksum,trashed",
+    supportsAllDrives: "true",
   }));
   return await res.json();
 }
