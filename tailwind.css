@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@source "./index.html";
+@source "./app.js";
+@source "./modules.js";
 
 @theme {
   --color-sima-primary: #0B3AB5;
