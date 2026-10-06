@@ -155,18 +155,139 @@ function showAuthPanel(mode){
 }
 async function loadApprovalQueue(){
   if(S.profile?.tipe!=='admin') return;
-  const box=$('#pending-users'), orgSel=$('#approval-org-filter');
+  const box=$('#pending-users');
   if(!box) return;
   const [{data:pending,error:pe},{data:orgs,error:oe}]=await Promise.all([
     sb.from('profiles').select('id,nama,email,nim,status').in('status',['menunggu','ditolak']).order('nama',{ascending:true}),
-    sb.from('organisasi').select('id,nama,tipe,periode:periode_id(nama)').eq('aktif',true).order('nama')
+    sb.from('organisasi').select('id,nama,tipe,aktif,periode_id,periode:periode_id(nama,status)').order('nama')
   ]);
   if(pe){box.innerHTML='<p class="err">'+esc(pe.message)+'</p>';return;}
   if(oe){box.innerHTML='<p class="err">'+esc(oe.message)+'</p>';return;}
-  const options=(orgs||[]).map(o=>'<option value="'+o.id+'">'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</option>').join('');
-  box.innerHTML=(pending||[]).map(p=>'<div class="card pending-card" data-pending="'+p.id+'"><h3>'+esc(p.nama)+' '+(p.status==='ditolak'?'<span class="chip er">Ditolak</span>':'<span class="chip wa">Menunggu</span>')+'</h3><p class="sub">'+esc(p.email)+' · NIM '+esc(p.nim||'-')+'</p><div class="f2"><div><label>Role</label><select data-role><option value="mahasiswa">Mahasiswa</option><option value="dosen">Dosen</option><option value="wakil_rektor">Wakil Rektor Kemahasiswaan</option><option value="staf_keuangan">Staf Keuangan</option><option value="admin">Admin Sistem</option></select></div><div><label>Organisasi</label><select data-org><option value="">Tanpa organisasi</option>'+options+'</select></div><div><label>Jabatan</label><select data-jabatan><option>Anggota</option><option>Ketua</option><option>Wakil</option><option>Sekretaris</option><option>Bendahara</option><option>Presiden</option><option>Wakil Presiden</option><option>Menteri</option><option>Ketua Divisi</option></select></div></div><p class="err" data-pending-error></p><div style="display:flex;gap:8px;margin-top:12px"><button class="btn" type="button" data-approve-user="'+p.id+'">Setujui & tetapkan</button><button class="btn d" type="button" data-reject-user="'+p.id+'">Tolak</button></div></div>').join('')||'<div class="card"><p class="sub">Belum ada calon pengguna yang menunggu persetujuan.</p></div>';
+
+  const options=(orgs||[]).map(o=>{
+    const periodStatus=o.periode?.status||'-';
+    const active=(o.aktif===true && periodStatus==='aktif');
+    return '<option value="'+o.id+'" '+(!active?'data-inactive="1"':'')+'>'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+(active?'':' · tidak aktif')+'</option>';
+  }).join('');
+
+  const assignmentRow=(index,orgId='',jabatan='Anggota')=>'<div class="assignment-row f2" data-assignment-row>'+
+    '<div><label>Organisasi</label><select data-assignment-org><option value="">Pilih organisasi</option>'+options+'</select></div>'+
+    '<div><label>Jabatan</label><div style="display:flex;gap:8px"><select data-assignment-jabatan>'+
+      '<option '+(jabatan==='Anggota'?'selected':'')+'>Anggota</option>'+
+      '<option '+(jabatan==='Ketua'?'selected':'')+'>Ketua</option>'+
+      '<option '+(jabatan==='Wakil'?'selected':'')+'>Wakil</option>'+
+      '<option '+(jabatan==='Sekretaris'?'selected':'')+'>Sekretaris</option>'+
+      '<option '+(jabatan==='Bendahara'?'selected':'')+'>Bendahara</option>'+
+      '<option '+(jabatan==='Presiden'?'selected':'')+'>Presiden</option>'+
+      '<option '+(jabatan==='Wakil Presiden'?'selected':'')+'>Wakil Presiden</option>'+
+      '<option '+(jabatan==='Menteri'?'selected':'')+'>Menteri</option>'+
+      '<option '+(jabatan==='Ketua Divisi'?'selected':'')+'>Ketua Divisi</option>'+
+    '</select><button type="button" class="btn s small" data-remove-assignment>×</button></div></div>';
+
+  box.innerHTML=(pending||[]).map(p=>'<div class="card pending-card" data-pending="'+p.id+'">'+
+    '<h3>'+esc(p.nama)+' '+(p.status==='ditolak'?'<span class="chip er">Ditolak</span>':'<span class="chip wa">Menunggu</span>')+'</h3>'+
+    '<p class="sub">'+esc(p.email)+' · NIM '+esc(p.nim||'-')+'</p>'+
+    '<div><label>Role</label><select data-role>'+
+      '<option value="mahasiswa">Mahasiswa</option>'+
+      '<option value="dosen">Dosen</option>'+
+      '<option value="wakil_rektor">Wakil Rektor Kemahasiswaan</option>'+
+      '<option value="staf_keuangan">Staf Keuangan</option>'+
+      '<option value="admin">Admin Sistem</option>'+
+    '</select></div>'+
+    '<div data-assignment-list>'+assignmentRow(0)+'</div>'+
+    '<button type="button" class="btn s small" data-add-assignment>+ Tambah organisasi</button>'+
+    '<p class="sub" style="margin-top:8px">Mahasiswa dapat memiliki lebih dari satu organisasi, dengan jabatan berbeda pada tiap organisasi.</p>'+
+    '<p class="err" data-pending-error></p>'+
+    '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" type="button" data-approve-user="'+p.id+'">Setujui & tetapkan</button><button class="btn d" type="button" data-reject-user="'+p.id+'">Tolak</button></div>'+
+  '</div>').join('')||'<div class="card"><p class="sub">Belum ada calon pengguna yang menunggu persetujuan.</p></div>';
+
+  box.querySelectorAll('[data-assignment-row]').forEach((row)=>{
+    const sel=row.querySelector('[data-assignment-org]');
+    if(sel && sel.options.length===1){
+      row.insertAdjacentHTML('beforebegin','<p class="err">Belum ada organisasi yang terdaftar di database.</p>');
+    }
+  });
 }
 async function approvePending(id,card){
+  const role=card.querySelector('[data-role]').value;
+  const er=card.querySelector('[data-pending-error]'); er.textContent='';
+  const assignments=[...card.querySelectorAll('[data-assignment-row]')].map(row=>({
+    organisasi_id:row.querySelector('[data-assignment-org]')?.value||'',
+    jabatan:row.querySelector('[data-assignment-jabatan]')?.value||'Anggota'
+  })).filter(x=>x.organisasi_id);
+
+  if((role==='mahasiswa'||role==='dosen')&&!assignments.length){
+    er.textContent='Minimal pilih satu organisasi.';
+    return;
+  }
+
+  const unique=new Set();
+  for(const a of assignments){
+    if(unique.has(a.organisasi_id)){
+      er.textContent='Organisasi yang sama dipilih lebih dari sekali.';
+      return;
+    }
+    unique.add(a.organisasi_id);
+  }
+
+  const inactive=[...card.querySelectorAll('[data-assignment-row]')].some(row=>{
+    const sel=row.querySelector('[data-assignment-org]');
+    const opt=sel?.selectedOptions?.[0];
+    return opt?.dataset?.inactive==='1';
+  });
+  if(inactive){
+    er.textContent='Pilih organisasi yang aktif dan berada pada periode aktif.';
+    return;
+  }
+
+  const btn=card.querySelector('[data-approve-user]'); btn.disabled=true; btn.textContent='Menyimpan...';
+  try{
+    const {error:pe}=await sb.from('profiles').update({tipe:role,status:'aktif'}).eq('id',id);
+    if(pe) throw pe;
+
+    if(role==='mahasiswa'){
+      const {data:existing,error:ee}=await sb.from('keanggotaan').select('id,organisasi_id').eq('akun_id',id);
+      if(ee) throw ee;
+      const existingMap=new Map((existing||[]).map(x=>[x.organisasi_id,x.id]));
+      for(const a of assignments){
+        const oldId=existingMap.get(a.organisasi_id);
+        if(oldId){
+          const {error:e2}=await sb.from('keanggotaan').update({jabatan:a.jabatan,status:'aktif',ditetapkan_oleh:S.user.id}).eq('id',oldId);
+          if(e2) throw e2;
+        }else{
+          const {error:e2}=await sb.from('keanggotaan').insert({akun_id:id,organisasi_id:a.organisasi_id,jabatan:a.jabatan,status:'aktif',ditetapkan_oleh:S.user.id});
+          if(e2) throw e2;
+        }
+      }
+      const {error:pd}=await sb.from('pembimbing_organisasi').update({status:'nonaktif'}).eq('akun_id',id).eq('status','aktif');
+      if(pd) throw pd;
+    }else if(role==='dosen'){
+      const {error:de}=await sb.from('keanggotaan').update({status:'nonaktif'}).eq('akun_id',id).eq('status','aktif');
+      if(de) throw de;
+      const {data:existing,error:ee}=await sb.from('pembimbing_organisasi').select('id,organisasi_id').eq('akun_id',id);
+      if(ee) throw ee;
+      const existingMap=new Map((existing||[]).map(x=>[x.organisasi_id,x.id]));
+      for(const a of assignments){
+        const oldId=existingMap.get(a.organisasi_id);
+        if(oldId){
+          const {error:e2}=await sb.from('pembimbing_organisasi').update({status:'aktif',ditetapkan_oleh:S.user.id}).eq('id',oldId);
+          if(e2) throw e2;
+        }else{
+          const {error:e2}=await sb.from('pembimbing_organisasi').insert({akun_id:id,organisasi_id:a.organisasi_id,status:'aktif',ditetapkan_oleh:S.user.id});
+          if(e2) throw e2;
+        }
+      }
+    }
+
+    await sb.from('notifikasi').insert({akun_id:id,pesan:'Pendaftaran Anda telah disetujui. Role dan organisasi sudah ditetapkan. Silakan login kembali.'});
+    toast('Akun disetujui. '+(assignments.length?assignments.length+' organisasi ditetapkan.':''));
+    loadApprovalQueue();
+  }catch(ex){
+    er.textContent=ex.message||String(ex);
+    btn.disabled=false; btn.textContent='Setujui & tetapkan';
+  }
+}
+(id,card){
   const role=card.querySelector('[data-role]').value;
   const orgId=card.querySelector('[data-org]').value||null;
   const jabatan=card.querySelector('[data-jabatan]').value;
