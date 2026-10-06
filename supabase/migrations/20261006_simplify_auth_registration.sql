@@ -62,3 +62,11 @@ with check(
     where organisasi_id in(select public.pengurus_inti())
   )
 );
+
+
+drop policy if exists notifikasi_admin_write on public.notifikasi;
+create policy notifikasi_admin_write
+on public.notifikasi
+for insert
+to authenticated
+with check(public.lihat_semua());
