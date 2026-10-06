@@ -1,3 +1,5 @@
+alter table public.proker_kolaborator add column if not exists komentar text;
+
 -- SIMA MHS Production compatibility and registration hardening
 alter table public.profiles
   add column if not exists created_at timestamptz not null default now();
