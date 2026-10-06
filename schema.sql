@@ -338,6 +338,24 @@ using(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::
 
 
 
+-- Production compatibility: profile timestamps used by UI and maintenance.
+alter table public.profiles
+  add column if not exists created_at timestamptz not null default now();
+alter table public.profiles
+  add column if not exists updated_at timestamptz not null default now();
+
+update public.profiles
+set created_at=coalesce(created_at,now()),
+    updated_at=coalesce(updated_at,now())
+where created_at is null or updated_at is null;
+
+drop policy if exists tautan_drive_write on public.tautan_drive;
+create policy tautan_drive_write
+on public.tautan_drive
+for insert
+to authenticated
+with check(proker_id in(select id from public.proker where organisasi_id in(select public.pengurus_inti())));
+
 -- ====== SIMA AUTH REGISTRATION / ADMIN APPROVAL ======
 -- Calon pengguna mendaftar dari browser setelah Supabase Auth sign-up.
 -- Frontend kemudian membuat row profiles dengan status 'menunggu'.
