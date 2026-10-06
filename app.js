@@ -319,7 +319,7 @@ document.addEventListener('submit',async e=>{
        const up=await sb.storage.from('profile-avatars').upload(fotoPath,file,{contentType:file.type,upsert:false});
        if(up.error) throw up.error;
      }
-     const {data:upd,error}=await sb.rpc('update_profile_me',{p_nama:nama,p_nim:nim||null,p_foto_path:fotoPath,p_email:authEmail});
+     const {data:upd,error}=await sb.rpc('update_profile_me',{p_nama:nama,p_nim:nim||null,p_foto_path:fotoPath});
      if(error) throw error;
      S.profile=upd||{...S.profile,nama,nim,email:authEmail,foto_path:fotoPath};
      if(fotoPath){const {data:signed}=await sb.storage.from('profile-avatars').createSignedUrl(fotoPath,3600);S.profile.foto_url=signed?.signedUrl||'';}
