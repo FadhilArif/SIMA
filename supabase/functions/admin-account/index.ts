@@ -1,6 +1,6 @@
 import { withSupabase } from "npm:@supabase/server@^1";
-import nodemailer from "npm:nodemailer@^9";
 import { json, options } from "../_shared/http.ts";
+import { sendAccountEmail } from "../_shared/google-mail.ts";
 
 function randomPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -8,15 +8,7 @@ function randomPassword() {
   return Array.from(bytes, b => chars[b % chars.length]).join("") + "!";
 }
 
-const transport = nodemailer.createTransport({
-  host: Deno.env.get("SMTP_HOSTNAME")!,
-  port: Number(Deno.env.get("SMTP_PORT") || 587),
-  secure: Deno.env.get("SMTP_SECURE") === "true",
-  auth: {
-    user: Deno.env.get("SMTP_USERNAME")!,
-    pass: Deno.env.get("SMTP_PASSWORD")!
-  }
-});
+
 
 function profileType(kind:string){
   if(kind === "wakil_rektor") return "wakil_rektor";
@@ -159,21 +151,11 @@ export default {
           mentorId=m.id;
         }
 
-        await transport.sendMail({
-          from:Deno.env.get("SMTP_FROM")!,
-          to:email.trim(),
-          subject:"Akun awal SIMA MHS",
-          text:
-            "Halo "+nama.trim()+"\\n\\n"+
-            "Akun SIMA MHS Anda telah dibuat oleh Admin Sistem.\\n"+
-            "Email: "+email.trim()+"\\n"+
-            "Kata sandi sementara: "+password+"\\n\\n"+
-            "Login pertama wajib mengganti kata sandi sementara.",
-          html:
-            "<p>Halo "+nama.trim()+"</p>"+
-            "<p>Akun SIMA MHS Anda telah dibuat oleh Admin Sistem.</p>"+
-            "<p><b>Email:</b> "+email.trim()+"<br><b>Kata sandi sementara:</b> "+password+"</p>"+
-            "<p>Login pertama wajib mengganti kata sandi sementara.</p>"
+        const mail = await sendAccountEmail({
+          name:nama.trim(),
+          email:email.trim(),
+          password,
+          role:kind
         });
 
         await ctx.supabaseAdmin.from("jejak_audit").insert({
@@ -188,14 +170,18 @@ export default {
             tipe:type,
             kind,
             organisasi_id,
-            jabatan
+            jabatan,
+            email_status:mail.sent ? "terkirim" : "belum_terkirim"
           }
         });
 
         return json({
           ok:true,
           account_id:user.user.id,
-          profile_type:type
+          profile_type:type,
+          password,
+          email_sent:mail.sent,
+          email_message:mail.sent ? "Kredensial dikirim via Google Apps Script." : mail.reason
         });
       }catch(e){
         if(mentorId) await ctx.supabaseAdmin.from("pembimbing_organisasi").delete().eq("id",mentorId);
