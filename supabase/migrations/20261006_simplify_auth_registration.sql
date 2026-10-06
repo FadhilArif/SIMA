@@ -1,5 +1,10 @@
--- SIMA MHS: simplify public registration
--- Run once on an existing Production database.
+-- SIMA MHS Production compatibility and registration hardening
+alter table public.profiles
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.profiles
+  add column if not exists updated_at timestamptz not null default now();
+
 alter table public.profiles
   drop constraint if exists profiles_status_check;
 
@@ -44,3 +49,16 @@ for all
 to authenticated
 using(public.lihat_semua())
 with check(public.lihat_semua());
+
+drop policy if exists tautan_drive_write on public.tautan_drive;
+create policy tautan_drive_write
+on public.tautan_drive
+for insert
+to authenticated
+with check(
+  proker_id in (
+    select id
+    from public.proker
+    where organisasi_id in(select public.pengurus_inti())
+  )
+);
