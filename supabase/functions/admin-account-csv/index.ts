@@ -133,12 +133,7 @@ export default {
             if(me)throw me;mentorId=m.id;
           }
 
-          await transport.sendMail({
-            from:Deno.env.get("SMTP_FROM")!,to:r.email,subject:"Akun awal SIMA MHS",
-            text:"Halo "+r.nama+"\n\nAkun SIMA MHS Anda telah dibuat oleh Admin Sistem.\nEmail: "+r.email+"\nKata sandi sementara: "+password+"\n\nLogin pertama wajib mengganti kata sandi sementara.",
-            html:"<p>Halo "+r.nama+"</p><p>Akun SIMA MHS Anda telah dibuat oleh Admin Sistem.</p><p><b>Email:</b> "+r.email+"<br><b>Kata sandi sementara:</b> "+password+"</p><p>Login pertama wajib mengganti kata sandi sementara.</p>"
-          });
-          await ctx.supabaseAdmin.from("jejak_audit").insert({
+          // Bootstrap mode: no SMTP required. Password is returned once to the Admin.\n         await ctx.supabaseAdmin.from("jejak_audit").insert({
             akun_id:ctx.user.id,sebagai:"Admin",aksi:"akun_awal_dibuat_csv",objek:"profiles",objek_id:u.user.id,
             nilai_baru:{nama:r.nama,email:r.email,kind:r.kind,organisasi_id}
           });
