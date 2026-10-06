@@ -62,3 +62,12 @@ Jangan pernah menaruh secret/service-role key di frontend. Browser hanya memakai
 
 ## Catatan
 Integrasi Google Drive belum dapat dianggap live sampai secret Google diisi, folder Drive dibagikan ke Service Account, dan Edge Functions dideploy ke project Supabase. Setelah itu lakukan uji satu organisasi dengan satu PDF dan beberapa foto dummy.
+
+
+## Frontend build
+
+SIMA MHS now uses Tailwind CSS v4 for the global stylesheet and new module UI. The project builds tailwind.css into style.css with @tailwindcss/cli; Vercel is configured to run npm run build.
+
+New functional modules include: Dashboard, Inbox review and document review actions, Struktur & anggota with manual and CSV membership import, Galeri, Rapat, Plafon/anggaran, Pencairan, Laporan akhir periode, Periode management, Jejak audit, Kalender, and Profil.
+
+The module layer is in modules.js and is loaded after app.js.
