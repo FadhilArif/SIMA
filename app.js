@@ -9,7 +9,7 @@ const S = {
   user:{ nama:'', email:'' },
   profile:{ tipe:'mahasiswa' },
   ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
-  ctxs:[], proker:[], memberships:[], notifications:[], notificationsLoaded:false, aaCsv:''
+  ctxs:[], proker:[], memberships:[], notifications:[], notificationsLoaded:false
 };
 
 const MENU_MAP = {
@@ -137,63 +137,6 @@ function renderNotifications(){
   p.hidden=false;
 }
 
-async function loadAdminOrganizations(){
-  if(!sb||S.profile?.tipe!=='admin') return [];
-  const {data,error}=await sb.from('organisasi').select('id,nama,tipe,aktif,periode:periode_id(nama)').eq('aktif',true).order('nama');
-  if(error){ toast('Gagal memuat organisasi: '+error.message); return []; }
-  return data||[];
-}
-function accountKindOptions(){
-  return [
-    ['wakil_rektor','Wakil Rektor Bidang Kemahasiswaan'],
-    ['staf_keuangan','Staf Keuangan'],
-    ['dosen','Dosen Pembimbing'],
-    ['presiden_bem','Presiden BEM'],
-    ['ketua_organisasi','Ketua HMJ / UKM / Club']
-  ];
-}
-function refreshInitialAccountForm(){
-  const kind=$('#aa-kind')?.value, org=$('#aa-org-wrap'), nim=$('#aa-nim-wrap'), note=$('#aa-role-note');
-  if(!kind) return;
-  const needsOrg=['dosen','presiden_bem','ketua_organisasi'].includes(kind);
-  const needsNim=['presiden_bem','ketua_organisasi'].includes(kind);
-  if(org) org.hidden=!needsOrg;
-  if(nim) nim.hidden=!needsNim;
-  const labels={
-    wakil_rektor:'Akun tetap lintas periode. Tidak memakai NIM.',
-    staf_keuangan:'Akun tetap lintas periode. Tidak menjadi anggota organisasi.',
-    dosen:'Akun dosen; Admin langsung menetapkan organisasi yang dibimbing.',
-    presiden_bem:'Akun mahasiswa + jabatan Presiden pada organisasi BEM.',
-    ketua_organisasi:'Akun mahasiswa + jabatan Ketua pada HMJ, UKM, atau Club.'
-  };
-  if(note) note.textContent=labels[kind]||'';
-  const sel=$('#aa-org'); if(sel){
-    [...sel.options].forEach(o=>{ 
-      const t=o.dataset.tipe; 
-      const ok=kind==='presiden_bem'?t==='BEM':kind==='ketua_organisasi'?['HMJ','UKM','Club'].includes(t):kind==='dosen';
-      o.hidden=!ok && o.value!=='';
-    });
-    if(sel.selectedOptions[0]?.hidden) sel.value='';
-  }
-}
-async function loadInitialAccountOrganizations(){
-  const orgs=await loadAdminOrganizations();
-  const sel=$('#aa-org'); if(!sel)return;
-  sel.innerHTML='<option value="">Pilih organisasi</option>'+orgs.map(o=>'<option value="'+o.id+'" data-tipe="'+esc(o.tipe)+'">'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</option>').join('');
-  refreshInitialAccountForm();
-}
-async function loadInitialAccounts(){
-  if(!sb||S.profile?.tipe!=='admin') return [];
-  const {data,error}=await sb.from('profiles').select('id,nama,email,tipe,nim,status,created_at').order('created_at',{ascending:false}).limit(50);
-  if(error) return [];
-  const ids=(data||[]).filter(x=>x.tipe!=='admin').map(x=>x.id);
-  let memberships=[];
-  if(ids.length){
-    const {data:m}=await sb.from('keanggotaan').select('akun_id,jabatan,organisasi:organisasi_id(nama,tipe,periode:periode_id(nama))').in('akun_id',ids);
-    memberships=m||[];
-  }
-  return (data||[]).map(p=>({...p,roles:memberships.filter(m=>m.akun_id===p.id)}));
-}
 
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
 async function loadProker() {
@@ -253,7 +196,7 @@ const V = {
   review: () => '<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p><div class="card">Belum ada dokumen yang perlu direview.</div>'
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
-function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin'){ loadInitialAccountOrganizations(); loadInitialAccounts().then(rows=>{ const out=$('#aa-list'); if(!out)return; out.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>{const rr=x.roles.map(r=>{const o=r.organisasi;return (o?.nama||'Organisasi')+' · '+r.jabatan+' · '+(o?.periode?.nama||'-');}).join('<br>'); return '<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+(x.nim?' · NIM '+esc(x.nim):'')+(rr?'<br>'+esc(rr):'')+'</small></div>';}).join('')||'<p class="sub">Belum ada akun selain Admin.</p>'; }); } }
+function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); }
 
 function pesertaRow(reset) { const box = $('#ps'); if (!box) return; if (reset) box.innerHTML = '';
   box.insertAdjacentHTML('beforeend', `<div class="peserta"><input placeholder="Organisasi peserta" aria-label="Organisasi peserta"><input type="number" min="0" placeholder="Porsi Rp" aria-label="Porsi plafon"><button type="button" class="btn d" data-del aria-label="Hapus peserta">×</button></div>`); }
@@ -338,46 +281,10 @@ Object.assign(V,{
  plafon:()=>'<h1 class="t">Plafon dan anggaran</h1><p class="sub">Pantau plafon, pengajuan, cair, dan sisa.</p><div class="card">Belum ada data anggaran.</div>',
  cair:()=>stub('Pencairan dan verifikasi'),
  periode:()=>stub('Periode'),
- akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Admin membuat akun awal dan menetapkan peran awal sebelum pimpinan mendaftarkan anggota organisasinya.</p><div class="card"><div class="tabs"><button class="on" id="aa-tab-manual" type="button">Buat manual</button><button id="aa-tab-csv" type="button">Via CSV</button></div><div id="aa-manual"><p id="aa-role-note" class="sub">Pilih jenis akun untuk melihat data yang diperlukan.</p><form id="aa-form" class="profile-list"><label for="aa-kind">Jenis akun</label><select id="aa-kind" required><option value="">Pilih jenis akun</option>'+accountKindOptions().map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select><label>Nama lengkap</label><input id="aa-nama" required placeholder="Nama orang yang diberi akun"><div id="aa-nim-wrap" hidden><label>NIM</label><input id="aa-nim" placeholder="Contoh: 22.0.A.1628"></div><label>Email</label><input id="aa-email" type="email" required placeholder="email@stikesmhk.ac.id"><div id="aa-org-wrap" hidden><label>Organisasi / penugasan</label><select id="aa-org"><option value="">Pilih organisasi</option></select></div><p id="aa-error" class="err"></p><button class="btn" type="submit">Buat akun & kirim kredensial</button></form></div><div id="aa-csv" hidden><p class="sub">Untuk akun awal: Wakil Rektor, Staf Keuangan, Dosen Pembimbing, Presiden BEM, dan Ketua HMJ/UKM/Club.</p><button class="btn s small" id="aa-download-template" type="button">Download template CSV</button><label style="margin-top:12px">File CSV akun awal</label><input id="aa-csv-file" type="file" accept=".csv,text/csv"><p class="sub" id="aa-csv-hint">Kolom: jenis_akun,nama,nim,email,organisasi_nama,periode</p><button class="btn" id="aa-csv-preview" type="button">Preview CSV</button><p class="sub" id="aa-csv-result"></p><div id="aa-csv-actions" hidden style="margin-top:12px"><button class="btn" id="aa-csv-commit" type="button">Buat semua akun</button></div></div></div><div class="card"><h3>Akun yang sudah dibuat</h3><div id="aa-list" class="profile-list"><p class="sub">Memuat...</p></div></div>', audit:()=>stub('Jejak audit'),
+ akun:()=>{ const rows=S.memberships||[]; const list=rows.map(x=>'<div class="profile-item"><b>'+esc(x.organisasi?.nama||'Organisasi')+'</b><small>Jabatan: '+esc(x.jabatan||'-')+' · Periode: '+esc(x.organisasi?.periode?.nama||'-')+'</small></div>').join(''); return '<h1 class="t">Akun dan penetapan</h1><p class="sub">Pembuatan akun login dilakukan melalui Supabase Authentication. SIMA memakai tabel profil untuk menentukan role dan keanggotaan.</p><div class="card"><h3>1. Buat akun login</h3><p class="sub">Buka Authentication → Users → Add user → Create new user. Centang Auto confirm user.</p><a class="btn" href="https://supabase.com/dashboard/project/vgzhkvxzzvllmricfzto/auth/users" target="_blank" rel="noopener">Buka Supabase Authentication</a></div><div class="card"><h3>2. Tetapkan profil dan jabatan</h3><p class="sub">Setelah user dibuat, Admin mengisi profil dan keanggotaan melalui SQL Editor. Bootstrap awal tidak memakai Edge Function atau SMTP.</p><pre class="card" style="overflow:auto;white-space:pre-wrap">-- Contoh profil\ninsert into public.profiles (id,nama,email,tipe,status,nim)\nvalues ('UUID_USER','Nama Lengkap','email@example.com','mahasiswa','aktif','22.0.A.1628');\n\n-- Contoh Ketua organisasi\ninsert into public.keanggotaan (akun_id,organisasi_id,jabatan,status,ditetapkan_oleh)\nvalues ('UUID_USER','UUID_ORGANISASI','Ketua','aktif',auth.uid());</pre></div><div class="card"><h3>3. Penetapan yang sudah tersimpan</h3>'+ (list||'<p class="sub">Belum ada penetapan untuk akun ini.</p>') +'</div>'; },, audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
- if(e.target.id==='aa-tab-manual'){
-   $('#aa-manual').hidden=false; $('#aa-csv').hidden=true; e.target.classList.add('on'); $('#aa-tab-csv')?.classList.remove('on'); return;
- }
- if(e.target.id==='aa-tab-csv'){
-   $('#aa-manual').hidden=true; $('#aa-csv').hidden=false; e.target.classList.add('on'); $('#aa-tab-manual')?.classList.remove('on'); return;
- }
- if(e.target.id==='aa-download-template'){
-   const csv='jenis_akun,nama,nim,email,organisasi_nama,periode\nwakil_rektor,,,wakil@stikesmhk.ac.id,,\nstaf_keuangan,,,keuangan@stikesmhk.ac.id,,\ndosen,Nama Dosen,,dosen@stikesmhk.ac.id,HIMIKA,2026/2027\npresiden_bem,Nama Presiden,22.0.A.1628,presiden@stikesmhk.ac.id,BEM,2026/2027\nketua_organisasi,Nama Ketua,22.0.A.1629,ketua@stikesmhk.ac.id,HIMIKA,2026/2027\n';
-   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='template_akun_awal_sima.csv'; a.click(); URL.revokeObjectURL(url); return;
- }
- if(e.target.id==='aa-csv-preview'){
-   const file=$('#aa-csv-file')?.files?.[0], out=$('#aa-csv-result'), actions=$('#aa-csv-actions');
-   if(!file){out.textContent='Pilih file CSV terlebih dahulu.';return;}
-   try{
-     const r=await invokeFn('admin-account-csv',{action:'preview',csv:await file.text()});
-     out.textContent='Preview: '+r.valid+' valid, '+r.invalid+' bermasalah dari '+r.total+' baris.';
-     if(actions) actions.hidden=r.valid===0;
-     S.aaCsv=await file.text();
-   }catch(ex){out.textContent=ex.message||String(ex);if(actions)actions.hidden=true;}
-   return;
- }
- if(e.target.id==='aa-csv-commit'){
-   const out=$('#aa-csv-result'); e.target.disabled=true; e.target.textContent='Membuat akun...';
-   try{
-     const r=await invokeFn('admin-account-csv',{action:'commit',csv:S.aaCsv||''});
-     const made=(r.results||[]).filter(x=>x.status==='sukses');
-     const failed=(r.results||[]).filter(x=>x.status==='error');
-     out.innerHTML='<b>Selesai: '+r.created+' akun dibuat, '+r.skipped+' dilewati.</b>'+
-       (made.length?'<div style="margin-top:10px">'+made.map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+'</small><br><b>Password sementara:</b> <code>'+esc(x.password)+'</code></div>').join('')+'</div>':'')+
-       (failed.length?'<div style="margin-top:10px"><b>Yang gagal:</b><br>'+failed.map(x=>'Baris '+x.nomor_baris+' · '+esc(x.nama||x.email||'-')+': '+esc(x.pesan||'Tidak diketahui')).join('<br>')+'</div>':'');
-     loadInitialAccounts().then(rows=>{const list=$('#aa-list');if(list)list.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+'</small></div>').join('')||'<p class="sub">Belum ada akun selain Admin.</p>';});
-   }catch(ex){out.textContent=ex.message||String(ex);}
-   finally{e.target.disabled=false;e.target.textContent='Buat semua akun';}
-   return;
- }
-
  if(e.target.id==='bell'){
    if(!S.notificationsLoaded) await loadNotifications();
    const p=$('#notifyPanel'); if(p?.hidden) renderNotifications(); else if(p) p.hidden=true;
@@ -413,23 +320,6 @@ document.addEventListener('click',async e=>{
  if(e.target.id==='otp-verify'){try{await invokeFn('admin-otp',{action:'verify',email:$('#otp-email').value.trim(),code:$('#otp-code').value.trim()});$('#otp-result').textContent='OTP valid. Aktivitas Admin terverifikasi.';toast('OTP Admin berhasil diverifikasi.');}catch(ex){$('#otp-result').textContent=ex.message||String(ex);}return;}
 });
 document.addEventListener('submit',async e=>{
- if(e.target.id==='aa-form'){
-   e.preventDefault();
-   const er=$('#aa-error'); er.textContent='';
-   const kind=$('#aa-kind').value, nama=$('#aa-nama').value.trim(), nim=$('#aa-nim').value.trim(), email=$('#aa-email').value.trim(), organisasi_id=$('#aa-org').value||null;
-   if(!kind||!nama||!email) return er.textContent='Jenis akun, nama, dan email wajib diisi.';
-   if(['presiden_bem','ketua_organisasi'].includes(kind) && !nim) return er.textContent='NIM wajib untuk pimpinan mahasiswa.';
-   if(['dosen','presiden_bem','ketua_organisasi'].includes(kind) && !organisasi_id) return er.textContent='Pilih organisasi/penugasan.';
-   const btn=e.target.querySelector('button[type="submit"]'); btn.disabled=true; btn.textContent='Membuat akun...';
-   try{
-     const r=await invokeFn('admin-account',{kind,nama,nim: nim||null,email,organisasi_id});
-     toast('Akun dibuat. Kredensial sementara dikirim ke email.');
-     e.target.reset(); $('#aa-org-wrap').hidden=true; $('#aa-nim-wrap').hidden=true; refreshInitialAccountForm();
-     loadInitialAccountOrganizations(); loadInitialAccounts().then(rows=>{const out=$('#aa-list');if(out)out.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+'</small></div>').join('')||'<p class="sub">Belum ada akun selain Admin.</p>';});
-   }catch(ex){er.textContent=ex.message||String(ex);}
-   finally{btn.disabled=false;btn.textContent='Buat akun & kirim kredensial';}
-   return;
- }
  if(e.target.id==='profile-form'){
    e.preventDefault();
    const er=$('#profile-error'); er.textContent='';
