@@ -145,6 +145,12 @@ function renderNotifications(){
 
 
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
+function resetClientState(){
+  S.user={nama:'',email:''};
+  S.profile={tipe:'mahasiswa',status:null};
+  S.ctx=0; S.view='beranda'; S.tab='semua'; S.q=''; S.orgId=null;
+  S.ctxs=[]; S.proker=[]; S.memberships=[]; S.notifications=[]; S.notificationsLoaded=false; S.kolabs=[]; S.organizations=[]; S.periods=[];
+}
 function showAuthPanel(mode){
   $('#fl').hidden=mode!=='login';
   $('#fsu').hidden=mode!=='signup';
@@ -155,9 +161,13 @@ function showAuthPanel(mode){
 }
 async function loadOrganizations(){
   if(!sb) return;
-  const {data,error}=await sb.from('organisasi').select('id,nama,tipe,aktif,periode_id,periode:periode_id(id,nama,status)').order('nama');
-  if(error){toast('Gagal memuat organisasi: '+error.message);return;}
-  S.organizations=data||[];
+  const [{data:orgs,error:oe},{data:periods,error:pe}]=await Promise.all([
+    sb.from('organisasi').select('id,nama,tipe,aktif,periode_id,periode:periode_id(id,nama,status)').order('nama'),
+    sb.from('periode').select('id,nama,status,batas_lpj').order('nama')
+  ]);
+  if(oe){toast('Gagal memuat organisasi: '+oe.message);return;}
+  if(pe){toast('Gagal memuat periode: '+pe.message);return;}
+  S.organizations=orgs||[]; S.periods=periods||[];
 }
 async function loadApprovalQueue(){
   if(S.profile?.tipe!=='admin') return;
@@ -355,6 +365,7 @@ const V = {
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
 function renderOrganizationList(){
+  const periodSel=$('#org-periode'); if(periodSel) periodSel.innerHTML='<option value="">Pilih periode</option>'+(S.periods||[]).map(p=>'<option value="'+p.id+'">'+esc(p.nama)+' · '+esc(p.status)+'</option>').join('');
   const box=$('#org-list'); if(!box) return;
   const rows=(S.organizations||[]).map(o=>{
     const ps=o.periode?.status||'-';
@@ -467,7 +478,7 @@ document.addEventListener('submit', async e => {{
     return;
   }
   if (e.target.id === 'fl') { e.preventDefault();
-    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; const {data:existingProfile}=await sb.from('profiles').select('id').eq('id',data.user.id).maybeSingle(); if(!existingProfile){ const meta=data.user.user_metadata||{}; const {error:pe}=await sb.from('profiles').insert({id:data.user.id,nama:meta.nama||meta.name||data.user.email,email:data.user.email,nim:meta.nim||null,tipe:'mahasiswa',status:'menunggu'}); if(pe) return $('#le').textContent='Akun login berhasil, tetapi profil belum dapat dibuat: '+pe.message; } try { await loadUserAccessContext(); await loadNotifications(); await loadCollaborations(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
+    if (sb) { resetClientState(); const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; const {data:existingProfile}=await sb.from('profiles').select('id').eq('id',data.user.id).maybeSingle(); if(!existingProfile){ const meta=data.user.user_metadata||{}; const {error:pe}=await sb.from('profiles').insert({id:data.user.id,nama:meta.nama||meta.name||data.user.email,email:data.user.email,nim:meta.nim||null,tipe:'mahasiswa',status:'menunggu'}); if(pe) return $('#le').textContent='Akun login berhasil, tetapi profil belum dapat dibuat: '+pe.message; } try { await loadUserAccessContext(); await loadNotifications(); await loadCollaborations(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.profile?.status==='menunggu') S.view='menunggu'; else if(S.profile?.status==='ditolak') S.view='ditolak'; else if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') {
     e.preventDefault();
@@ -619,7 +630,7 @@ document.addEventListener('click',async e=>{
 if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
  if(e.target.id==='show-forgot'){showAuthPanel('forgot');return;}
  if(e.target.id==='back-login'||e.target.id==='back-login-2'){showAuthPanel('login');return;}
- if(e.target.id==='pending-logout'){await sb?.auth.signOut();S.user={nama:'',email:''};S.profile={tipe:'mahasiswa',status:null};S.ctxs=[];S.orgId=null;$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
+ if(e.target.id==='pending-logout'){resetClientState();await sb?.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
  const addAssignment=e.target.closest('[data-add-assignment]');
  if(addAssignment){
    const card=addAssignment.closest('[data-pending]');
@@ -650,6 +661,7 @@ if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
    return;
  }
  if(e.target.id==='av'){ S.view='profil'; render(); return; }
+ const logout=e.target.closest('[data-profile-logout]'); if(logout){resetClientState();await sb?.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
  if(e.target.id==='notif-read-all'){ await sb?.rpc('tandai_notifikasi_dibaca',{p_id:null}); await loadNotifications(); renderNotifications(); return; }
  const nr=e.target.closest('[data-notif]');
  if(nr){ await sb?.rpc('tandai_notifikasi_dibaca',{p_id:nr.dataset.notif}); await loadNotifications(); renderNotifications(); return; }
