@@ -1,0 +1,13 @@
+{
+  "name": "sima-mhs",
+  "private": true,
+  "version": "2.0.0",
+  "scripts": {
+    "build": "@tailwindcss/cli -i ./tailwind.css -o ./style.css --minify",
+    "dev": "@tailwindcss/cli -i ./tailwind.css -o ./style.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.0",
+    "tailwindcss": "^4.3.0"
+  }
+}

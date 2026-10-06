@@ -20,7 +20,7 @@ const MENU_MAP = {
   pembimbing: [['Utama',[['beranda','Beranda'],['inbox','Inbox review'],['cair','Pencairan dan verifikasi'],['proker','Proker'],['galeri','Galeri']]]],
   wakil_rektor: [['Utama',[['beranda','Beranda'],['plafon','Plafon'],['cair','Anggaran & pencairan'],['inbox','Inbox tahap BEM'],['proker','Semua proker'],['galeri','Galeri pemantau'],['audit','Jejak audit']]]],
   staf_keuangan: [['Anggaran',[['plafon','Plafon'],['cair','Dashboard anggaran']]]],
-  admin: [['Admin',[['periode','Periode'],['akun','Akun dan penetapan'],['audit','Jejak audit']]]],
+  admin: [['Admin',[['periode','Periode'],['organisasi','Organisasi'],['akun','Akun dan penetapan'],['audit','Jejak audit'],['profil','Profil saya']]]],
   none: []
 };
 
@@ -145,6 +145,12 @@ function renderNotifications(){
 
 
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
+function resetClientState(){
+  S.user={nama:'',email:''};
+  S.profile={tipe:'mahasiswa',status:null};
+  S.ctx=0; S.view='beranda'; S.tab='semua'; S.q=''; S.orgId=null;
+  S.ctxs=[]; S.proker=[]; S.memberships=[]; S.notifications=[]; S.notificationsLoaded=false; S.kolabs=[]; S.organizations=[]; S.periods=[];
+}
 function showAuthPanel(mode){
   $('#fl').hidden=mode!=='login';
   $('#fsu').hidden=mode!=='signup';
@@ -153,50 +159,160 @@ function showAuthPanel(mode){
   if(mode==='signup') $('#sue').textContent='';
   if(mode==='forgot') $('#rpe').textContent='';
 }
+async function loadOrganizations(){
+  if(!sb) return;
+  const [{data:raw,error:oe},{data:periods,error:pe}]=await Promise.all([
+    sb.rpc('admin_list_organisasi'),
+    sb.from('periode').select('id,nama,status,batas_lpj').order('nama')
+  ]);
+  if(oe){toast('Gagal memuat organisasi: '+oe.message);return;}
+  if(pe){toast('Gagal memuat periode: '+pe.message);return;}
+  S.organizations=(raw||[]).map(o=>({
+    id:o.id,nama:o.nama,tipe:o.tipe,aktif:o.aktif,periode_id:o.periode_id,
+    periode:{id:o.periode_id,nama:o.periode_nama,status:o.periode_status}
+  }));
+  S.periods=periods||[];
+}
 async function loadApprovalQueue(){
   if(S.profile?.tipe!=='admin') return;
-  const box=$('#pending-users'), orgSel=$('#approval-org-filter');
+  const box=$('#pending-users');
   if(!box) return;
-  const [{data:pending,error:pe},{data:orgs,error:oe}]=await Promise.all([
-    sb.from('profiles').select('id,nama,email,nim,status').eq('status','menunggu').order('nama',{ascending:true}),
-    sb.from('organisasi').select('id,nama,tipe,periode:periode_id(nama)').eq('aktif',true).order('nama')
+  const [{data:pending,error:pe},{data:rawOrgs,error:oe}]=await Promise.all([
+    sb.from('profiles').select('id,nama,email,nim,status').in('status',['menunggu','ditolak']).order('nama',{ascending:true}),
+    sb.rpc('admin_list_organisasi')
   ]);
+  const orgs=(rawOrgs||[]).map(o=>({
+    id:o.id,nama:o.nama,tipe:o.tipe,aktif:o.aktif,periode_id:o.periode_id,
+    periode:{nama:o.periode_nama,status:o.periode_status}
+  }));
   if(pe){box.innerHTML='<p class="err">'+esc(pe.message)+'</p>';return;}
   if(oe){box.innerHTML='<p class="err">'+esc(oe.message)+'</p>';return;}
-  const options=(orgs||[]).map(o=>'<option value="'+o.id+'">'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</option>').join('');
-  box.innerHTML=(pending||[]).map(p=>'<div class="card pending-card" data-pending="'+p.id+'"><h3>'+esc(p.nama)+'</h3><p class="sub">'+esc(p.email)+' · NIM '+esc(p.nim||'-')+'</p><div class="f2"><div><label>Role</label><select data-role><option value="mahasiswa">Mahasiswa</option><option value="dosen">Dosen</option><option value="wakil_rektor">Wakil Rektor Kemahasiswaan</option><option value="staf_keuangan">Staf Keuangan</option><option value="admin">Admin Sistem</option></select></div><div><label>Organisasi</label><select data-org><option value="">Tanpa organisasi</option>'+options+'</select></div><div><label>Jabatan</label><select data-jabatan><option>Anggota</option><option>Ketua</option><option>Wakil</option><option>Sekretaris</option><option>Bendahara</option><option>Presiden</option><option>Wakil Presiden</option><option>Menteri</option><option>Ketua Divisi</option></select></div></div><p class="err" data-pending-error></p><div style="display:flex;gap:8px;margin-top:12px"><button class="btn" type="button" data-approve-user="'+p.id+'">Setujui & tetapkan</button><button class="btn d" type="button" data-reject-user="'+p.id+'">Tolak</button></div></div>').join('')||'<div class="card"><p class="sub">Belum ada calon pengguna yang menunggu persetujuan.</p></div>';
+
+  if(!orgs?.length){ box.innerHTML='<div class="card"><h3>Belum ada organisasi</h3><p class="sub">Buat organisasi terlebih dahulu di menu <b>Admin → Organisasi</b>. Setelah dibuat, organisasi akan muncul di sini dan dapat ditetapkan ke mahasiswa.</p><button class="btn" type="button" data-go="organisasi">Buka pengaturan organisasi</button></div>'; return; }
+
+  const options=(orgs||[]).map(o=>{
+    const periodStatus=o.periode?.status||'-';
+    const active=(o.aktif===true && periodStatus==='aktif');
+    return '<option value="'+o.id+'" '+(!active?'data-inactive="1"':'')+'>'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+(active?'':' · tidak aktif')+'</option>';
+  }).join('');
+
+  const assignmentRow=(index,orgId='',jabatan='Anggota')=>'<div class="assignment-row f2" data-assignment-row>'+
+    '<div><label>Organisasi</label><select data-assignment-org><option value="">Pilih organisasi</option>'+options+'</select></div>'+
+    '<div><label>Jabatan</label><div style="display:flex;gap:8px"><select data-assignment-jabatan>'+
+      '<option '+(jabatan==='Anggota'?'selected':'')+'>Anggota</option>'+
+      '<option '+(jabatan==='Ketua'?'selected':'')+'>Ketua</option>'+
+      '<option '+(jabatan==='Wakil'?'selected':'')+'>Wakil</option>'+
+      '<option '+(jabatan==='Sekretaris'?'selected':'')+'>Sekretaris</option>'+
+      '<option '+(jabatan==='Bendahara'?'selected':'')+'>Bendahara</option>'+
+      '<option '+(jabatan==='Presiden'?'selected':'')+'>Presiden</option>'+
+      '<option '+(jabatan==='Wakil Presiden'?'selected':'')+'>Wakil Presiden</option>'+
+      '<option '+(jabatan==='Menteri'?'selected':'')+'>Menteri</option>'+
+      '<option '+(jabatan==='Ketua Divisi'?'selected':'')+'>Ketua Divisi</option>'+
+    '</select><button type="button" class="btn s small" data-remove-assignment>×</button></div></div>';
+
+  box.innerHTML=(pending||[]).map(p=>'<div class="card pending-card" data-pending="'+p.id+'">'+
+    '<h3>'+esc(p.nama)+' '+(p.status==='ditolak'?'<span class="chip er">Ditolak</span>':'<span class="chip wa">Menunggu</span>')+'</h3>'+
+    '<p class="sub">'+esc(p.email)+' · NIM '+esc(p.nim||'-')+'</p>'+
+    '<div><label>Role</label><select data-role>'+
+      '<option value="mahasiswa">Mahasiswa</option>'+
+      '<option value="dosen">Dosen</option>'+
+      '<option value="wakil_rektor">Wakil Rektor Kemahasiswaan</option>'+
+      '<option value="staf_keuangan">Staf Keuangan</option>'+
+      '<option value="admin">Admin Sistem</option>'+
+    '</select></div>'+
+    '<div data-assignment-list>'+assignmentRow(0)+'</div>'+
+    '<button type="button" class="btn s small" data-add-assignment>+ Tambah organisasi</button>'+
+    '<p class="sub" style="margin-top:8px">Mahasiswa dapat memiliki lebih dari satu organisasi, dengan jabatan berbeda pada tiap organisasi.</p>'+
+    '<p class="err" data-pending-error></p>'+
+    '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" type="button" data-approve-user="'+p.id+'">Setujui & tetapkan</button><button class="btn d" type="button" data-reject-user="'+p.id+'">Tolak</button></div>'+
+  '</div>').join('')||'<div class="card"><p class="sub">Belum ada calon pengguna yang menunggu persetujuan.</p></div>';
+
+  box.querySelectorAll('[data-assignment-row]').forEach((row)=>{
+    const sel=row.querySelector('[data-assignment-org]');
+    if(sel && sel.options.length===1){
+      row.insertAdjacentHTML('beforebegin','<p class="err">Belum ada organisasi yang terdaftar di database.</p>');
+    }
+  });
 }
 async function approvePending(id,card){
   const role=card.querySelector('[data-role]').value;
-  const orgId=card.querySelector('[data-org]').value||null;
-  const jabatan=card.querySelector('[data-jabatan]').value;
   const er=card.querySelector('[data-pending-error]'); er.textContent='';
-  if(role==='mahasiswa' && !orgId){er.textContent='Mahasiswa wajib diberi organisasi.';return;}
-  if(role==='mahasiswa' && !jabatan){er.textContent='Jabatan wajib dipilih.';return;}
-  if(role==='dosen' && !orgId){er.textContent='Dosen wajib diberi organisasi pembimbing.';return;}
+  const assignments=[...card.querySelectorAll('[data-assignment-row]')].map(row=>({
+    organisasi_id:row.querySelector('[data-assignment-org]')?.value||'',
+    jabatan:row.querySelector('[data-assignment-jabatan]')?.value||'Anggota'
+  })).filter(x=>x.organisasi_id);
+
+  if((role==='mahasiswa'||role==='dosen')&&!assignments.length){
+    er.textContent='Minimal pilih satu organisasi.';
+    return;
+  }
+
+  const unique=new Set();
+  for(const a of assignments){
+    if(unique.has(a.organisasi_id)){
+      er.textContent='Organisasi yang sama dipilih lebih dari sekali.';
+      return;
+    }
+    unique.add(a.organisasi_id);
+  }
+
+  const inactive=[...card.querySelectorAll('[data-assignment-row]')].some(row=>{
+    const sel=row.querySelector('[data-assignment-org]');
+    const opt=sel?.selectedOptions?.[0];
+    return opt?.dataset?.inactive==='1';
+  });
+  if(inactive){
+    er.textContent='Pilih organisasi yang aktif dan berada pada periode aktif.';
+    return;
+  }
+
   const btn=card.querySelector('[data-approve-user]'); btn.disabled=true; btn.textContent='Menyimpan...';
   try{
-    const {error:pe}=await sb.from('profiles').update({tipe:role,status:'aktif',updated_at:new Date().toISOString()}).eq('id',id);
+    const {error:pe}=await sb.from('profiles').update({tipe:role,status:'aktif'}).eq('id',id);
     if(pe) throw pe;
-    const {error:kd}=await sb.from('keanggotaan').delete().eq('akun_id',id); if(kd) throw kd;
-    const {error:pd}=await sb.from('pembimbing_organisasi').delete().eq('akun_id',id); if(pd) throw pd;
+
     if(role==='mahasiswa'){
-      const {error:e}=await sb.from('keanggotaan').insert({akun_id:id,organisasi_id:orgId,jabatan,status:'aktif',ditetapkan_oleh:S.user.id});
-      if(e) throw e;
+      const {data:existing,error:ee}=await sb.from('keanggotaan').select('id,organisasi_id').eq('akun_id',id);
+      if(ee) throw ee;
+      const existingMap=new Map((existing||[]).map(x=>[x.organisasi_id,x.id]));
+      for(const a of assignments){
+        const oldId=existingMap.get(a.organisasi_id);
+        if(oldId){
+          const {error:e2}=await sb.from('keanggotaan').update({jabatan:a.jabatan,status:'aktif',ditetapkan_oleh:S.user.id}).eq('id',oldId);
+          if(e2) throw e2;
+        }else{
+          const {error:e2}=await sb.from('keanggotaan').insert({akun_id:id,organisasi_id:a.organisasi_id,jabatan:a.jabatan,status:'aktif',ditetapkan_oleh:S.user.id});
+          if(e2) throw e2;
+        }
+      }
+      const {error:pd}=await sb.from('pembimbing_organisasi').update({status:'nonaktif'}).eq('akun_id',id).eq('status','aktif');
+      if(pd) throw pd;
     }else if(role==='dosen'){
-      const {error:e}=await sb.from('pembimbing_organisasi').insert({akun_id:id,organisasi_id:orgId,status:'aktif',ditetapkan_oleh:S.user.id});
-      if(e) throw e;
+      const {error:de}=await sb.from('keanggotaan').update({status:'nonaktif'}).eq('akun_id',id).eq('status','aktif');
+      if(de) throw de;
+      const {data:existing,error:ee}=await sb.from('pembimbing_organisasi').select('id,organisasi_id').eq('akun_id',id);
+      if(ee) throw ee;
+      const existingMap=new Map((existing||[]).map(x=>[x.organisasi_id,x.id]));
+      for(const a of assignments){
+        const oldId=existingMap.get(a.organisasi_id);
+        if(oldId){
+          const {error:e2}=await sb.from('pembimbing_organisasi').update({status:'aktif',ditetapkan_oleh:S.user.id}).eq('id',oldId);
+          if(e2) throw e2;
+        }else{
+          const {error:e2}=await sb.from('pembimbing_organisasi').insert({akun_id:id,organisasi_id:a.organisasi_id,status:'aktif',ditetapkan_oleh:S.user.id});
+          if(e2) throw e2;
+        }
+      }
     }
-    await sb.from('notifikasi').insert({akun_id:id, pesan:'Pendaftaran Anda telah disetujui. Role dan organisasi sudah ditetapkan. Silakan login kembali.'});
-    toast('Akun disetujui dan role ditetapkan.');
+
+    await sb.from('notifikasi').insert({akun_id:id,pesan:'Pendaftaran Anda telah disetujui. Role dan organisasi sudah ditetapkan. Silakan login kembali.'});
+    toast('Akun disetujui. '+(assignments.length?assignments.length+' organisasi ditetapkan.':''));
     loadApprovalQueue();
   }catch(ex){
-    await sb.from('profiles').update({status:'menunggu'}).eq('id',id);
     er.textContent=ex.message||String(ex);
     btn.disabled=false; btn.textContent='Setujui & tetapkan';
   }
 }
-
 async function loadProker() {
   if (!sb || !S.orgId) { S.proker=[]; return; }
   let q = sb.from('proker').select('id,nama,ketua_pelaksana,pengajuan,tanggal_mulai,tanggal_selesai,status,organisasi_id,item_anggaran(subtotal),pencairan_dana(jumlah)').order('tanggal_mulai'); q=q.eq('organisasi_id',S.orgId); const { data, error } = await q;
@@ -258,7 +374,16 @@ const V = {
   review: () => '<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p><div class="card">Belum ada dokumen yang perlu direview.</div>'
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
-function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin') loadApprovalQueue(); }
+function renderOrganizationList(){
+  const periodSel=$('#org-periode'); if(periodSel) periodSel.innerHTML='<option value="">Pilih periode</option>'+(S.periods||[]).map(p=>'<option value="'+p.id+'">'+esc(p.nama)+' · '+esc(p.status)+'</option>').join('');
+  const box=$('#org-list'); if(!box) return;
+  const rows=(S.organizations||[]).map(o=>{
+    const ps=o.periode?.status||'-';
+    return '<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:12px"><div><b>'+esc(o.nama)+'</b><div class="sub">'+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</div></div><span class="chip '+(o.aktif&&ps==='aktif'?'ok':'er')+'">'+(o.aktif&&ps==='aktif'?'Aktif':'Nonaktif')+'</span></div></div>';
+  }).join('');
+  box.innerHTML=rows||'<p class="sub">Belum ada organisasi. Buat organisasi pertama di formulir di atas.</p>';
+}
+function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin') loadApprovalQueue(); if(S.view==='organisasi'&&S.profile?.tipe==='admin') loadOrganizations().then(renderOrganizationList); }
 
 function pesertaRow(reset) { const box = $('#ps'); if (!box) return; if (reset) box.innerHTML = '';
   box.insertAdjacentHTML('beforeend', `<div class="peserta"><input placeholder="Organisasi peserta" aria-label="Organisasi peserta"><input type="number" min="0" placeholder="Porsi Rp" aria-label="Porsi plafon"><button type="button" class="btn d" data-del aria-label="Hapus peserta">×</button></div>`); }
@@ -294,6 +419,22 @@ document.addEventListener('change', e => {
   }
 });
 document.addEventListener('submit', async e => {
+  if(e.target.id==='org-form'){
+    e.preventDefault();
+    const err=$('#org-error'); err.textContent='';
+    const nama=$('#org-nama').value.trim();
+    const tipe=$('#org-tipe').value;
+    const periode_id=$('#org-periode').value||null;
+    const aktif=$('#org-aktif').value==='true';
+    if(!nama||!periode_id){err.textContent='Nama dan periode wajib diisi.';return;}
+    const {error}=await sb.from('organisasi').insert({nama,tipe,periode_id,aktif});
+    if(error){err.textContent=error.message;return;}
+    await loadOrganizations();
+    toast('Organisasi berhasil dibuat.');
+    render();
+    return;
+  }
+
   if(e.target.id==='fsu'){
     e.preventDefault();
     const er=$('#sue'); er.textContent='';
@@ -347,7 +488,7 @@ document.addEventListener('submit', async e => {
     return;
   }
   if (e.target.id === 'fl') { e.preventDefault();
-    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; const {data:existingProfile}=await sb.from('profiles').select('id').eq('id',data.user.id).maybeSingle(); if(!existingProfile){ const meta=data.user.user_metadata||{}; const {error:pe}=await sb.from('profiles').insert({id:data.user.id,nama:meta.nama||meta.name||data.user.email,email:data.user.email,nim:meta.nim||null,tipe:'mahasiswa',status:'menunggu'}); if(pe) return $('#le').textContent='Akun login berhasil, tetapi profil belum dapat dibuat: '+pe.message; } try { await loadUserAccessContext(); await loadNotifications(); await loadCollaborations(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
+    if (sb) { resetClientState(); const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; const {data:existingProfile}=await sb.from('profiles').select('id').eq('id',data.user.id).maybeSingle(); if(!existingProfile){ const meta=data.user.user_metadata||{}; const {error:pe}=await sb.from('profiles').insert({id:data.user.id,nama:meta.nama||meta.name||data.user.email,email:data.user.email,nim:meta.nim||null,tipe:'mahasiswa',status:'menunggu'}); if(pe) return $('#le').textContent='Akun login berhasil, tetapi profil belum dapat dibuat: '+pe.message; } try { await loadUserAccessContext(); await loadNotifications(); await loadCollaborations(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.profile?.status==='menunggu') S.view='menunggu'; else if(S.profile?.status==='ditolak') S.view='ditolak'; else if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') {
     e.preventDefault();
@@ -472,6 +613,24 @@ Object.assign(V,{
   menunggu:()=>'<div class="pending-box"><div class="card"><div class="pending-icon">⏳</div><h1 class="t">Menunggu persetujuan Admin</h1><p class="sub">Akunmu sudah berhasil dibuat. Saat ini kamu belum mendapatkan role dan organisasi.</p><div class="pending-meta"><div class="card"><small>Email</small><b>'+esc(S.user?.email||'-')+'</b></div><div class="card"><small>Nama</small><b>'+esc(S.profile?.nama||'-')+'</b></div><div class="card"><small>NIM</small><b>'+esc(S.profile?.nim||'-')+'</b></div></div><p class="sub" style="margin-top:18px">Silakan tunggu Admin menetapkan role dan organisasi. Setelah disetujui, kamu bisa login kembali untuk masuk ke SIMA.</p><button class="btn" id="pending-logout" type="button">Keluar</button></div></div>',
   ditolak:()=>'<div class="pending-box"><div class="card"><div class="pending-icon">!</div><h1 class="t">Pendaftaran belum disetujui</h1><p class="sub">Admin belum menyetujui pendaftaran akun ini. Hubungi Admin Sistem untuk informasi lebih lanjut.</p><button class="btn" id="pending-logout" type="button">Keluar</button></div></div>',
   'reset-password':()=>'<div class="pending-box"><div class="card"><h1 class="t">Buat password baru</h1><p class="sub">Masukkan password baru untuk akun SIMA MHS.</p><form id="reset-password-form"><label>Password baru</label><input id="reset-pw1" type="password" minlength="8" required><label>Ulangi password baru</label><input id="reset-pw2" type="password" minlength="8" required><p class="err" id="reset-error"></p><button class="btn" type="submit">Simpan password</button></form></div></div>',
+  organisasi:()=>`
+    <h1 class="t">Organisasi</h1>
+    <p class="sub">Admin membuat dan mengatur BEM, HMJ, UKM, dan Club untuk setiap periode.</p>
+    <div class="card">
+      <h3>Tambah organisasi</h3>
+      <form id="org-form" class="f2">
+        <div><label>Nama organisasi</label><input id="org-nama" placeholder="Contoh: HIMIKA" required></div>
+        <div><label>Jenis</label><select id="org-tipe"><option>BEM</option><option>HMJ</option><option>UKM</option><option>Club</option></select></div>
+        <div><label>Periode</label><select id="org-periode"></select></div>
+        <div><label>Status</label><select id="org-aktif"><option value="true">Aktif</option><option value="false">Nonaktif</option></select></div>
+        <p class="err" id="org-error" style="grid-column:1/-1"></p>
+        <button class="btn" style="grid-column:1/-1">Tambah organisasi</button>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Daftar organisasi</h3>
+      <div id="org-list">Memuat...</div>
+    </div>`,
   akun:()=>`<h1 class="t">Akun dan penetapan</h1><p class="sub">Kelola calon pengguna yang mendaftar sendiri. Admin menetapkan role dan organisasi di sini.</p><div class="card"><h3>Calon pengguna menunggu persetujuan</h3><div id="pending-users"><p class="sub">Memuat...</p></div></div>`,
  audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
@@ -481,7 +640,27 @@ document.addEventListener('click',async e=>{
 if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
  if(e.target.id==='show-forgot'){showAuthPanel('forgot');return;}
  if(e.target.id==='back-login'||e.target.id==='back-login-2'){showAuthPanel('login');return;}
- if(e.target.id==='pending-logout'){await sb?.auth.signOut();S.user={nama:'',email:''};S.profile={tipe:'mahasiswa',status:null};S.ctxs=[];S.orgId=null;$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
+ if(e.target.id==='pending-logout'){resetClientState();await sb?.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
+ const addAssignment=e.target.closest('[data-add-assignment]');
+ if(addAssignment){
+   const card=addAssignment.closest('[data-pending]');
+   const list=card?.querySelector('[data-assignment-list]');
+   const first=list?.querySelector('[data-assignment-row]');
+   if(list&&first){
+     const clone=first.cloneNode(true);
+     clone.querySelector('[data-assignment-org]').value='';
+     clone.querySelector('[data-assignment-jabatan]').value='Anggota';
+     list.appendChild(clone);
+   }
+   return;
+ }
+ const removeAssignment=e.target.closest('[data-remove-assignment]');
+ if(removeAssignment){
+   const card=removeAssignment.closest('[data-pending]');
+   const rows=card?.querySelectorAll('[data-assignment-row]');
+   if(rows?.length>1) removeAssignment.closest('[data-assignment-row]').remove();
+   return;
+ }
  const approve=e.target.closest('[data-approve-user]');
  if(approve){const card=approve.closest('[data-pending]');await approvePending(approve.dataset.approveUser,card);return;}
  const reject=e.target.closest('[data-reject-user]');
@@ -492,6 +671,7 @@ if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
    return;
  }
  if(e.target.id==='av'){ S.view='profil'; render(); return; }
+ const logout=e.target.closest('[data-profile-logout]'); if(logout){resetClientState();await sb?.auth.signOut();$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
  if(e.target.id==='notif-read-all'){ await sb?.rpc('tandai_notifikasi_dibaca',{p_id:null}); await loadNotifications(); renderNotifications(); return; }
  const nr=e.target.closest('[data-notif]');
  if(nr){ await sb?.rpc('tandai_notifikasi_dibaca',{p_id:nr.dataset.notif}); await loadNotifications(); renderNotifications(); return; }
@@ -561,9 +741,43 @@ document.addEventListener('submit',async e=>{
 
 if(sb){
   sb.auth.onAuthStateChange((event,session)=>{
+    if(event==='SIGNED_OUT'){
+      resetClientState();
+      $('#app').hidden=true;
+      $('#login').hidden=false;
+      showAuthPanel('login');
+      return;
+    }
     if(event==='PASSWORD_RECOVERY'&&session){
+      resetClientState();
       S.user={...session.user,nama:session.user.user_metadata?.nama||session.user.email};
-      $('#login').hidden=true;$('#app').hidden=false;S.view='reset-password';render();
+      $('#login').hidden=true;
+      $('#app').hidden=false;
+      S.view='reset-password';
+      render();
+      return;
+    }
+    if(event==='SIGNED_IN'&&session){
+      const nextId=session.user.id;
+      if(S.user?.id && S.user.id!==nextId) resetClientState();
+      S.user={...session.user,nama:session.user.user_metadata?.nama||session.user.user_metadata?.name||session.user.email};
+      setTimeout(async()=>{
+        try{
+          await loadUserAccessContext();
+          await loadNotifications();
+          await loadCollaborations();
+          await loadProker();
+          if(S.profile?.status==='menunggu') S.view='menunggu';
+          else if(S.profile?.status==='ditolak') S.view='ditolak';
+          else if(S.user?.user_metadata?.must_change_password) S.view='change-password';
+          else if(!S.view||['menunggu','ditolak','change-password'].includes(S.view)) S.view='beranda';
+          $('#login').hidden=true;
+          $('#app').hidden=false;
+          render();
+        }catch(ex){
+          $('#le').textContent=ex.message||'Gagal memuat akun.';
+        }
+      },0);
     }
   });
 }

@@ -101,3 +101,12 @@ This distinction is intentional: a module that currently renders a stub is not c
 - LPJ late submissions are marked `diajukan_terlambat`.
 - Drive upload and completion checks now reject closed periods and restrict upload roles to organizational officers/Admin/Wakil Rektor.
 - Collaborative proker participants are persisted instead of remaining only in the browser.
+
+
+## Module completion and Tailwind v4
+
+The previously stubbed navigation now has working data-backed module views in modules.js. The global CSS source is now Tailwind CSS v4 (tailwind.css) with a production CLI build into style.css.
+
+Completed module layer: Dashboard; Inbox/review; Structure & members including CSV roster import for existing accounts; Gallery; Meetings; Budget/plafon; Disbursement; Period-end report; Period management; Audit trail; Calendar; User profile.
+
+These modules are still subject to the production Supabase migrations in supabase/migrations/20261006_module_completion.sql, supabase/migrations/20261006_structure_membership_write.sql, and the authentication hardening migration.
