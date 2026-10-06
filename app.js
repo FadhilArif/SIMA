@@ -137,6 +137,64 @@ function renderNotifications(){
   p.hidden=false;
 }
 
+async function loadAdminOrganizations(){
+  if(!sb||S.profile?.tipe!=='admin') return [];
+  const {data,error}=await sb.from('organisasi').select('id,nama,tipe,aktif,periode:periode_id(nama)').eq('aktif',true).order('nama');
+  if(error){ toast('Gagal memuat organisasi: '+error.message); return []; }
+  return data||[];
+}
+function accountKindOptions(){
+  return [
+    ['wakil_rektor','Wakil Rektor Bidang Kemahasiswaan'],
+    ['staf_keuangan','Staf Keuangan'],
+    ['dosen','Dosen Pembimbing'],
+    ['presiden_bem','Presiden BEM'],
+    ['ketua_organisasi','Ketua HMJ / UKM / Club']
+  ];
+}
+function refreshInitialAccountForm(){
+  const kind=$('#aa-kind')?.value, org=$('#aa-org-wrap'), nim=$('#aa-nim-wrap'), note=$('#aa-role-note');
+  if(!kind) return;
+  const needsOrg=['dosen','presiden_bem','ketua_organisasi'].includes(kind);
+  const needsNim=['presiden_bem','ketua_organisasi'].includes(kind);
+  if(org) org.hidden=!needsOrg;
+  if(nim) nim.hidden=!needsNim;
+  const labels={
+    wakil_rektor:'Akun tetap lintas periode. Tidak memakai NIM.',
+    staf_keuangan:'Akun tetap lintas periode. Tidak menjadi anggota organisasi.',
+    dosen:'Akun dosen; Admin langsung menetapkan organisasi yang dibimbing.',
+    presiden_bem:'Akun mahasiswa + jabatan Presiden pada organisasi BEM.',
+    ketua_organisasi:'Akun mahasiswa + jabatan Ketua pada HMJ, UKM, atau Club.'
+  };
+  if(note) note.textContent=labels[kind]||'';
+  const sel=$('#aa-org'); if(sel){
+    [...sel.options].forEach(o=>{ 
+      const t=o.dataset.tipe; 
+      const ok=kind==='presiden_bem'?t==='BEM':kind==='ketua_organisasi'?['HMJ','UKM','Club'].includes(t):kind==='dosen';
+      o.hidden=!ok && o.value!=='';
+    });
+    if(sel.selectedOptions[0]?.hidden) sel.value='';
+  }
+}
+async function loadInitialAccountOrganizations(){
+  const orgs=await loadAdminOrganizations();
+  const sel=$('#aa-org'); if(!sel)return;
+  sel.innerHTML='<option value="">Pilih organisasi</option>'+orgs.map(o=>'<option value="'+o.id+'" data-tipe="'+esc(o.tipe)+'">'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</option>').join('');
+  refreshInitialAccountForm();
+}
+async function loadInitialAccounts(){
+  if(!sb||S.profile?.tipe!=='admin') return [];
+  const {data,error}=await sb.from('profiles').select('id,nama,email,tipe,nim,status,created_at').order('created_at',{ascending:false}).limit(50);
+  if(error) return [];
+  const ids=(data||[]).filter(x=>x.tipe!=='admin').map(x=>x.id);
+  let memberships=[];
+  if(ids.length){
+    const {data:m}=await sb.from('keanggotaan').select('akun_id,jabatan,organisasi:organisasi_id(nama,tipe,periode:periode_id(nama))').in('akun_id',ids);
+    memberships=m||[];
+  }
+  return (data||[]).map(p=>({...p,roles:memberships.filter(m=>m.akun_id===p.id)}));
+}
+
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
 async function loadProker() {
   if (!sb || !S.orgId) { S.proker=[]; return; }
@@ -195,7 +253,7 @@ const V = {
   review: () => '<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p><div class="card">Belum ada dokumen yang perlu direview.</div>'
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
-function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); }
+function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin'){ loadInitialAccountOrganizations(); loadInitialAccounts().then(rows=>{ const out=$('#aa-list'); if(!out)return; out.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>{const rr=x.roles.map(r=>{const o=r.organisasi;return (o?.nama||'Organisasi')+' · '+r.jabatan+' · '+(o?.periode?.nama||'-');}).join('<br>'); return '<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+(x.nim?' · NIM '+esc(x.nim):'')+(rr?'<br>'+esc(rr):'')+'</small></div>';}).join('')||'<p class="sub">Belum ada akun selain Admin.</p>'; }); } }
 
 function pesertaRow(reset) { const box = $('#ps'); if (!box) return; if (reset) box.innerHTML = '';
   box.insertAdjacentHTML('beforeend', `<div class="peserta"><input placeholder="Organisasi peserta" aria-label="Organisasi peserta"><input type="number" min="0" placeholder="Porsi Rp" aria-label="Porsi plafon"><button type="button" class="btn d" data-del aria-label="Hapus peserta">×</button></div>`); }
@@ -219,6 +277,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('input', e => { if (e.target.id === 'q') { S.q = e.target.value; render(); $('#q').focus(); } if (e.target.closest('#kb')) hitung(); });
 document.addEventListener('change', e => {
   if(e.target.name==='pengajuan') $('#kb').hidden=e.target.value!=='kolaboratif';
+  if(e.target.id==='aa-kind') refreshInitialAccountForm();
   if(e.target.id==='cx'){
     S.ctx=+e.target.value;
     S.orgId=currentContext().org_id||null;
@@ -256,8 +315,7 @@ Object.assign(V,{
  plafon:()=>'<h1 class="t">Plafon dan anggaran</h1><p class="sub">Pantau plafon, pengajuan, cair, dan sisa.</p><div class="card">Belum ada data anggaran.</div>',
  cair:()=>stub('Pencairan dan verifikasi'),
  periode:()=>stub('Periode'),
- akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Impor anggota dan verifikasi OTP Admin.</p><div class="row2"><div class="card"><h3>Impor CSV anggota</h3><p class="sub">Minimal: nama/full_name dan email. Opsional: nim, jabatan, unit_nama.</p><input id="csv-file" type="file" accept=".csv,text/csv"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="csv-preview" type="button">Pratinjau CSV</button><button class="btn s" id="csv-commit" type="button" disabled>Konfirmasi impor</button></div><p id="csv-result" class="sub"></p></div><div class="card"><h3>OTP Admin</h3><label>Email pribadi operator</label><input id="otp-email" type="email" placeholder="operator@contoh.ac.id"><button class="btn w" id="otp-request" type="button">Kirim OTP</button><label style="margin-top:12px">Kode OTP</label><input id="otp-code" inputmode="numeric" maxlength="6" placeholder="6 digit"><button class="btn" id="otp-verify" type="button">Verifikasi OTP</button><p id="otp-result" class="sub"></p></div></div>',
- profil:()=>{ const p=S.profile||{}, ms=S.memberships||[]; const groups=ms.map(x=>{const org=x.organisasi?.nama||'Organisasi';const per=x.organisasi?.periode?.nama||'-';return '<div class="profile-item"><span class="profile-role">'+esc(org)+'</span><small>Jabatan: '+esc(x.jabatan||'-')+' · Periode: '+esc(per)+'</small></div>';}).join(''); const initials=(p.nama||p.email||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); return '<h1 class="t">Profil saya</h1><p class="sub">Data akun, organisasi, jabatan, dan periode yang terhubung.</p><div class="card"><div class="profile-grid"><div><div id="profile-photo-preview" class="profile-photo">'+(p.foto_url?'<img src="'+esc(p.foto_url)+'" alt="Foto profil" style="width:100%;height:100%;object-fit:cover;border-radius:24px">':initials)+'</div><label for="profile-photo">Foto profil</label><input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp"><small>Maksimal 2 MB.</small></div><form id="profile-form" class="profile-list"><label>Nama lengkap</label><input id="profile-nama" value="'+esc(p.nama||'')+'" required><label>NIM</label><input id="profile-nim" value="'+esc(p.nim||'')+'"><label>Email akun</label><input id="profile-email" type="email" value="'+esc(S.user?.email||p.email||'')+'" required><small class="sub">Perubahan email dapat meminta konfirmasi email.</small><p class="err" id="profile-error"></p><button class="btn" type="submit">Simpan perubahan</button></form></div></div><div class="card"><h3>Organisasi dan jabatan</h3><div class="profile-list">'+(groups||'<p class="sub">Belum ada keanggotaan organisasi.</p>')+'</div></div><div class="card"><h3>Akses akun</h3><p>Jenis akun: <b>'+esc(roleLabel(p.tipe))+'</b></p><p>Status: <b>'+esc(p.status||'-')+'</b></p></div>'; }, audit:()=>stub('Jejak audit'),
+ akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Admin membuat akun awal dan menetapkan peran awal sebelum pimpinan mendaftarkan anggota organisasinya.</p><div class="card"><h3>Buat akun awal</h3><p id="aa-role-note" class="sub">Pilih jenis akun untuk melihat data yang diperlukan.</p><form id="aa-form" class="profile-list"><label for="aa-kind">Jenis akun</label><select id="aa-kind" required><option value="">Pilih jenis akun</option>'+accountKindOptions().map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select><label>Nama lengkap</label><input id="aa-nama" required placeholder="Nama orang yang diberi akun"><div id="aa-nim-wrap"><label>NIM</label><input id="aa-nim" placeholder="Contoh: 22.0.A.1628"></div><label>Email</label><input id="aa-email" type="email" required placeholder="email@stikesmhk.ac.id"><div id="aa-org-wrap" hidden><label>Organisasi / penugasan</label><select id="aa-org"><option value="">Pilih organisasi</option></select></div><p id="aa-error" class="err"></p><button class="btn" type="submit">Buat akun & kirim kredensial</button></form></div><div class="card"><h3>Akun yang sudah dibuat</h3><div id="aa-list" class="profile-list"><p class="sub">Memuat...</p></div></div>', audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
@@ -296,6 +354,23 @@ document.addEventListener('click',async e=>{
  if(e.target.id==='otp-verify'){try{await invokeFn('admin-otp',{action:'verify',email:$('#otp-email').value.trim(),code:$('#otp-code').value.trim()});$('#otp-result').textContent='OTP valid. Aktivitas Admin terverifikasi.';toast('OTP Admin berhasil diverifikasi.');}catch(ex){$('#otp-result').textContent=ex.message||String(ex);}return;}
 });
 document.addEventListener('submit',async e=>{
+ if(e.target.id==='aa-form'){
+   e.preventDefault();
+   const er=$('#aa-error'); er.textContent='';
+   const kind=$('#aa-kind').value, nama=$('#aa-nama').value.trim(), nim=$('#aa-nim').value.trim(), email=$('#aa-email').value.trim(), organisasi_id=$('#aa-org').value||null;
+   if(!kind||!nama||!email) return er.textContent='Jenis akun, nama, dan email wajib diisi.';
+   if(['presiden_bem','ketua_organisasi'].includes(kind) && !nim) return er.textContent='NIM wajib untuk pimpinan mahasiswa.';
+   if(['dosen','presiden_bem','ketua_organisasi'].includes(kind) && !organisasi_id) return er.textContent='Pilih organisasi/penugasan.';
+   const btn=e.target.querySelector('button[type="submit"]'); btn.disabled=true; btn.textContent='Membuat akun...';
+   try{
+     const r=await invokeFn('admin-account',{kind,nama,nim: nim||null,email,organisasi_id});
+     toast('Akun dibuat. Kredensial sementara dikirim ke email.');
+     e.target.reset(); $('#aa-org-wrap').hidden=true; $('#aa-nim-wrap').hidden=true; refreshInitialAccountForm();
+     loadInitialAccountOrganizations(); loadInitialAccounts().then(rows=>{const out=$('#aa-list');if(out)out.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+'</small></div>').join('')||'<p class="sub">Belum ada akun selain Admin.</p>';});
+   }catch(ex){er.textContent=ex.message||String(ex);}
+   finally{btn.disabled=false;btn.textContent='Buat akun & kirim kredensial';}
+   return;
+ }
  if(e.target.id==='profile-form'){
    e.preventDefault();
    const er=$('#profile-error'); er.textContent='';
