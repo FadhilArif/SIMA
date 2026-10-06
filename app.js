@@ -180,6 +180,8 @@ async function loadApprovalQueue(){
   if(pe){box.innerHTML='<p class="err">'+esc(pe.message)+'</p>';return;}
   if(oe){box.innerHTML='<p class="err">'+esc(oe.message)+'</p>';return;}
 
+  if(!orgs?.length){ box.innerHTML='<div class="card"><h3>Belum ada organisasi</h3><p class="sub">Buat organisasi terlebih dahulu di menu <b>Admin → Organisasi</b>. Setelah dibuat, organisasi akan muncul di sini dan dapat ditetapkan ke mahasiswa.</p><button class="btn" type="button" data-go="organisasi">Buka pengaturan organisasi</button></div>'; return; }
+
   const options=(orgs||[]).map(o=>{
     const periodStatus=o.periode?.status||'-';
     const active=(o.aktif===true && periodStatus==='aktif');
