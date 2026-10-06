@@ -330,7 +330,6 @@ document.addEventListener('submit', async e => {
     $('#le').textContent='Password berhasil diubah. Silakan login.';
     return;
   }
-  if(e.target.id==='fl'){ e.preventDefault();
   if (e.target.id === 'fl') { e.preventDefault();
     if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); await loadNotifications(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.profile?.status==='menunggu') S.view='menunggu'; else if(S.profile?.status==='ditolak') S.view='ditolak'; else if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
