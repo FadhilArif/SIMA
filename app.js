@@ -410,7 +410,7 @@ document.addEventListener('change', e => {
     loadProker().then(()=>loadCollaborations()).then(render);
   }
 });
-document.addEventListener('submit', async e => {{
+document.addEventListener('submit', async e => {
   if(e.target.id==='org-form'){
     e.preventDefault();
     const err=$('#org-error'); err.textContent='';
