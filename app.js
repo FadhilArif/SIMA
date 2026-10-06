@@ -25,7 +25,7 @@ const MENU_MAP = {
 
 function menuForContext(ctx){ return MENU_MAP[ctx?.kind] || MENU_MAP.none; }
 function canCreateProker(ctx){
-  return ['organisasi','bph','review'].includes(ctx?.kind) && !['Koordinator'].includes(ctx?.peran);
+  return ['organisasi','bph'].includes(ctx?.kind);
 }
 
 function roleLabel(tipe){
@@ -123,11 +123,17 @@ const chip = s => { const [t, c] = ST[s] || [s, '']; return `<span class="chip $
 function renderShell() {
   const ctx=currentContext(), menu=menuForContext(ctx);
   $('#nav').innerHTML = menu.map(([g,it]) => `<div class="grp">${g}</div>` + it.map(([k,t]) => `<button class="nav ${S.view===k?'on':''}" data-go="${k}">${t}</button>`).join('')).join('');
-  const mobile=[['beranda','Beranda']];
-  if(menu.some(([,it])=>it.some(([k])=>k==='proker'))) mobile.push(['proker','Proker']);
-  if(canCreateProker(ctx)) mobile.push(['form','+']);
-  if(menu.some(([,it])=>it.some(([k])=>k==='inbox'))) mobile.push(['inbox','Review']);
-  if(menu.some(([,it])=>it.some(([k])=>k==='galeri'))) mobile.push(['galeri','Galeri']);
+  const flat=menu.flatMap(([,it])=>it);
+  const mobile=[];
+  if(canCreateProker(ctx)){
+    if(flat.some(([k])=>k==='beranda')) mobile.push(['beranda','Beranda']);
+    if(flat.some(([k])=>k==='proker')) mobile.push(['proker','Proker']);
+    mobile.push(['form','+']);
+    if(flat.some(([k])=>k==='inbox')) mobile.push(['inbox','Review']);
+    if(flat.some(([k])=>k==='galeri')) mobile.push(['galeri','Galeri']);
+  } else {
+    mobile.push(...flat.slice(0,5));
+  }
   $('#bn').innerHTML=mobile.map(([k,t])=>`<button class="${k==='form'?'fab':S.view===k?'on':''}" data-go="${k}" aria-label="${t}">${t}</button>`).join('');
   $('#cx').innerHTML=S.ctxs.map((x,i)=>`<option value="${i}" ${i===S.ctx?'selected':''}>${x.konteks||x.org+(x.peran?' · '+x.peran:'')}</option>`).join('');
   const displayName=S.user?.user_metadata?.nama||S.user?.user_metadata?.name||S.profile?.nama||S.user?.email||'User';
