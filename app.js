@@ -156,7 +156,7 @@ async function loadApprovalQueue(){
   const box=$('#pending-users'), orgSel=$('#approval-org-filter');
   if(!box) return;
   const [{data:pending,error:pe},{data:orgs,error:oe}]=await Promise.all([
-    sb.from('profiles').select('id,nama,email,nim,status,created_at').eq('status','menunggu').order('created_at',{ascending:true}),
+    sb.from('profiles').select('id,nama,email,nim,status').eq('status','menunggu').order('nama',{ascending:true}),
     sb.from('organisasi').select('id,nama,tipe,periode:periode_id(nama)').eq('aktif',true).order('nama')
   ]);
   if(pe){box.innerHTML='<p class="err">'+esc(pe.message)+'</p>';return;}
@@ -176,8 +176,8 @@ async function approvePending(id,card){
   try{
     const {error:pe}=await sb.from('profiles').update({tipe:role,status:'aktif',updated_at:new Date().toISOString()}).eq('id',id);
     if(pe) throw pe;
-    await sb.from('keanggotaan').delete().eq('akun_id',id);
-    await sb.from('pembimbing_organisasi').delete().eq('akun_id',id);
+    const {error:kd}=await sb.from('keanggotaan').delete().eq('akun_id',id); if(kd) throw kd;
+    const {error:pd}=await sb.from('pembimbing_organisasi').delete().eq('akun_id',id); if(pd) throw pd;
     if(role==='mahasiswa'){
       const {error:e}=await sb.from('keanggotaan').insert({akun_id:id,organisasi_id:orgId,jabatan,status:'aktif',ditetapkan_oleh:S.user.id});
       if(e) throw e;
@@ -185,6 +185,7 @@ async function approvePending(id,card){
       const {error:e}=await sb.from('pembimbing_organisasi').insert({akun_id:id,organisasi_id:orgId,status:'aktif',ditetapkan_oleh:S.user.id});
       if(e) throw e;
     }
+    await sb.from('notifikasi').insert({akun_id:id, pesan:'Pendaftaran Anda telah disetujui. Role dan organisasi sudah ditetapkan. Silakan login kembali.'});
     toast('Akun disetujui dan role ditetapkan.');
     loadApprovalQueue();
   }catch(ex){
