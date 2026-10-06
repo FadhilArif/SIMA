@@ -5,15 +5,16 @@ SIMA MHS — Sistem Informasi dan Manajemen Organisasi Mahasiswa.
 ## Struktur
 - `index.html`, `style.css`, `app.js`: web statis desktop + mobile.
 - `schema.sql`: schema PostgreSQL + RLS + OTP admin; file utama disimpan di Google Drive API.
-- `supabase/functions/`: Edge Functions untuk Google Drive, SMTP, impor CSV, dan OTP Admin.
+- `supabase/functions/`: Edge Functions untuk Google Drive, impor anggota CSV, SMTP/OTP Admin, dan kebutuhan server-side lain. **Bootstrap akun awal tidak menggunakan Edge Function.**
 
 ## Setup Supabase
 1. Buat/siapkan project Supabase.
 2. Buka **SQL Editor** lalu paste seluruh isi `schema.sql` dan jalankan sekali.
 3. Authentication → Providers: matikan public sign-up.
-4. Authentication → SMTP: isi SMTP resmi kampus/provider. Supabase Auth memakai SMTP ini untuk email Auth.
+4. Authentication → Providers: matikan public sign-up.
 5. Buat Admin pertama di Authentication → Users, lalu buat row `profiles` dengan `tipe='admin'`.
-6. Isi `admin_operator` untuk Admin dan email pribadi operator.
+6. Untuk akun awal (Wakil Rektor, Staf Keuangan, Dosen, Presiden BEM, Ketua HMJ/UKM/Club), buat user langsung di **Authentication → Users**, lalu tetapkan `profiles`, `keanggotaan`, atau `pembimbing_organisasi` melalui SQL Editor. Tidak ada Edge Function atau SMTP yang dibutuhkan untuk bootstrap akun ini.
+7. Isi `admin_operator` untuk Admin dan email pribadi operator.
 
 ## Edge Function secrets
 Jangan masukkan secret ke GitHub atau `app.js`. Supabase menyediakan secret environment untuk Edge Functions; gunakan:
@@ -58,8 +59,9 @@ Jangan pernah menaruh secret/service-role key di frontend. Browser hanya memakai
 ## Alur yang sudah dihubungkan
 - LPJ → PDF ke Google Drive.
 - LPJ → PDF + 1–10 foto langsung ke Google Drive.
-- CSV → preview → commit → pembuatan Auth/profile/keanggotaan → email kredensial sementara.
+- Admin → Authentication → buat akun awal → SQL Editor untuk `profiles`/`keanggotaan`/`pembimbing_organisasi`.
 - Admin → OTP email operator → audit.
+- Ketua/Presiden organisasi → impor anggota CSV sesuai organisasi aktif.
 - Akun hasil impor membawa `must_change_password=true` dan dipaksa mengganti password saat login pertama.
 
 ## Catatan
