@@ -443,6 +443,8 @@ drop policy if exists unit_read on unit_kerja; create policy unit_read on unit_k
 
 drop policy if exists unit_write on unit_kerja; create policy unit_write on unit_kerja for all to authenticated using(lihat_semua()) with check(lihat_semua());
 drop policy if exists keanggotaan_read on keanggotaan; create policy keanggotaan_read on keanggotaan for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
+
+drop policy if exists keanggotaan_write on keanggotaan; create policy keanggotaan_write on keanggotaan for all to authenticated using(organisasi_id in(select pengurus_inti()) or lihat_semua()) with check(organisasi_id in(select pengurus_inti()) or lihat_semua());
 drop policy if exists koordinator_read on penugasan_koordinator; create policy koordinator_read on penugasan_koordinator for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
 drop policy if exists pembimbing_read on pembimbing_organisasi; create policy pembimbing_read on pembimbing_organisasi for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
 drop policy if exists club_read on anggota_club; create policy club_read on anggota_club for select using(organisasi_id in(select org_saya()) or lihat_semua());
