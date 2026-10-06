@@ -294,30 +294,6 @@ async function approvePending(id,card){
   const er=card.querySelector('[data-pending-error]'); er.textContent='';
   if(role==='mahasiswa' && !orgId){er.textContent='Mahasiswa wajib diberi organisasi.';return;}
   if(role==='mahasiswa' && !jabatan){er.textContent='Jabatan wajib dipilih.';return;}
-  if(role==='dosen' && !orgId){er.textContent='Dosen wajib diberi organisasi pembimbing.';return;}
-  const btn=card.querySelector('[data-approve-user]'); btn.disabled=true; btn.textContent='Menyimpan...';
-  try{
-    const {error:pe}=await sb.from('profiles').update({tipe:role,status:'aktif',updated_at:new Date().toISOString()}).eq('id',id);
-    if(pe) throw pe;
-    const {error:kd}=await sb.from('keanggotaan').delete().eq('akun_id',id); if(kd) throw kd;
-    const {error:pd}=await sb.from('pembimbing_organisasi').delete().eq('akun_id',id); if(pd) throw pd;
-    if(role==='mahasiswa'){
-      const {error:e}=await sb.from('keanggotaan').insert({akun_id:id,organisasi_id:orgId,jabatan,status:'aktif',ditetapkan_oleh:S.user.id});
-      if(e) throw e;
-    }else if(role==='dosen'){
-      const {error:e}=await sb.from('pembimbing_organisasi').insert({akun_id:id,organisasi_id:orgId,status:'aktif',ditetapkan_oleh:S.user.id});
-      if(e) throw e;
-    }
-    await sb.from('notifikasi').insert({akun_id:id, pesan:'Pendaftaran Anda telah disetujui. Role dan organisasi sudah ditetapkan. Silakan login kembali.'});
-    toast('Akun disetujui dan role ditetapkan.');
-    loadApprovalQueue();
-  }catch(ex){
-    await sb.from('profiles').update({status:'menunggu'}).eq('id',id);
-    er.textContent=ex.message||String(ex);
-    btn.disabled=false; btn.textContent='Setujui & tetapkan';
-  }
-}
-
 async function loadProker() {
   if (!sb || !S.orgId) { S.proker=[]; return; }
   let q = sb.from('proker').select('id,nama,ketua_pelaksana,pengajuan,tanggal_mulai,tanggal_selesai,status,organisasi_id,item_anggaran(subtotal),pencairan_dana(jumlah)').order('tanggal_mulai'); q=q.eq('organisasi_id',S.orgId); const { data, error } = await q;
