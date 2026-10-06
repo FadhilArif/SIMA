@@ -9,7 +9,7 @@ const S = {
   user:{ nama:'', email:'' },
   profile:{ tipe:'mahasiswa' },
   ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
-  ctxs:[], proker:[]
+  ctxs:[], proker:[], memberships:[], notifications:[], notificationsLoaded:false
 };
 
 const MENU_MAP = {
@@ -55,6 +55,7 @@ async function loadUserAccessContext(){
 
   if(profileRes.error) throw profileRes.error;
   S.profile=profileRes.data || {tipe:'mahasiswa'};
+  S.memberships=membershipRes.data||[];
   S.ctxs=[];
 
   const add=(ctx)=>{
@@ -107,8 +108,34 @@ async function loadUserAccessContext(){
 
   S.ctx=0;
   S.orgId=S.ctxs[0]?.org_id || null;
+  S.profile.foto_url='';
+  if(S.profile.foto_path){
+    const {data:signed}=await sb.storage.from('profile-avatars').createSignedUrl(S.profile.foto_path,3600);
+    S.profile.foto_url=signed?.signedUrl||'';
+  }
 }
 
+async function loadNotifications(){
+  if(!sb||!S.user?.id) return;
+  const {data,error}=await sb.from('notifikasi').select('id,organisasi_id,pesan,dibaca,created_at,organisasi:organisasi_id(nama)').eq('akun_id',S.user.id).order('created_at',{ascending:false}).limit(30);
+  if(error) return;
+  S.notifications=data||[]; S.notificationsLoaded=true; updateNotificationBadge();
+}
+function updateNotificationBadge(){
+  const b=$('#nbadge'); if(!b) return;
+  const n=S.notifications.filter(x=>!x.dibaca).length;
+  b.hidden=n===0; if(n)b.textContent=n>9?'9+':String(n);
+}
+function renderNotifications(){
+  const p=$('#notifyPanel'); if(!p) return;
+  const rows=S.notifications.map(n=>{
+    const org=n.organisasi?.nama||'SIMA MHS';
+    const d=new Date(n.created_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+    return `<button class="notify-item ${n.dibaca?'':'unread'}" type="button" data-notif="${n.id}"><b>${esc(org)}</b><span>${esc(n.pesan)}</span><small>${d}</small></button>`;
+  }).join('');
+  p.innerHTML=`<div class="notify-head"><span>Notifikasi</span><button class="btn s small" id="notif-read-all" type="button">Tandai dibaca</button></div><div class="notify-list">${rows||'<div class="card" style="margin:12px">Belum ada notifikasi.</div>'}</div>`;
+  p.hidden=false;
+}
 
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
 async function loadProker() {
@@ -137,7 +164,10 @@ function renderShell() {
   $('#bn').innerHTML=mobile.map(([k,t])=>`<button class="${k==='form'?'fab':S.view===k?'on':''}" data-go="${k}" aria-label="${t}">${t}</button>`).join('');
   $('#cx').innerHTML=S.ctxs.map((x,i)=>`<option value="${i}" ${i===S.ctx?'selected':''}>${x.konteks||x.org+(x.peran?' · '+x.peran:'')}</option>`).join('');
   const displayName=S.user?.user_metadata?.nama||S.user?.user_metadata?.name||S.profile?.nama||S.user?.email||'User';
-  $('#av').textContent=displayName.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const av=$('#av');
+  av.textContent=S.profile?.foto_url?'':displayName.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  av.style.backgroundImage=S.profile?.foto_url?\`url("${S.profile.foto_url}")\`:'';
+  av.style.backgroundSize='cover'; av.style.backgroundPosition='center';
 }
 const V = {
   beranda: () => `<h1 class="t">Beranda</h1><p class="sub">Ringkasan aktivitas dari semua konteks Anda.</p>
@@ -165,7 +195,7 @@ const V = {
   review: () => '<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p><div class="card">Belum ada dokumen yang perlu direview.</div>'
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
-function render() { renderShell(); $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); }
+function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); }
 
 function pesertaRow(reset) { const box = $('#ps'); if (!box) return; if (reset) box.innerHTML = '';
   box.insertAdjacentHTML('beforeend', `<div class="peserta"><input placeholder="Organisasi peserta" aria-label="Organisasi peserta"><input type="number" min="0" placeholder="Porsi Rp" aria-label="Porsi plafon"><button type="button" class="btn d" data-del aria-label="Hapus peserta">×</button></div>`); }
@@ -201,7 +231,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('submit', async e => {
   if (e.target.id === 'fl') { e.preventDefault();
-    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
+    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); await loadNotifications(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), kolab = f.pengajuan === 'kolaboratif', er = [];
     if (!f.nama) er.push('Nama program kerja wajib diisi'); if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi'); if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai'); if (!f.tempat) er.push('Lokasi wajib diisi');
@@ -227,10 +257,19 @@ Object.assign(V,{
  cair:()=>stub('Pencairan dan verifikasi'),
  periode:()=>stub('Periode'),
  akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Impor anggota dan verifikasi OTP Admin.</p><div class="row2"><div class="card"><h3>Impor CSV anggota</h3><p class="sub">Minimal: nama/full_name dan email. Opsional: nim, jabatan, unit_nama.</p><input id="csv-file" type="file" accept=".csv,text/csv"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="csv-preview" type="button">Pratinjau CSV</button><button class="btn s" id="csv-commit" type="button" disabled>Konfirmasi impor</button></div><p id="csv-result" class="sub"></p></div><div class="card"><h3>OTP Admin</h3><label>Email pribadi operator</label><input id="otp-email" type="email" placeholder="operator@contoh.ac.id"><button class="btn w" id="otp-request" type="button">Kirim OTP</button><label style="margin-top:12px">Kode OTP</label><input id="otp-code" inputmode="numeric" maxlength="6" placeholder="6 digit"><button class="btn" id="otp-verify" type="button">Verifikasi OTP</button><p id="otp-result" class="sub"></p></div></div>',
- audit:()=>stub('Jejak audit'),
+ profil:()=>{ const p=S.profile||{}, ms=S.memberships||[]; const groups=ms.map(x=>{const org=x.organisasi?.nama||'Organisasi';const per=x.organisasi?.periode?.nama||'-';return '<div class="profile-item"><span class="profile-role">'+esc(org)+'</span><small>Jabatan: '+esc(x.jabatan||'-')+' · Periode: '+esc(per)+'</small></div>';}).join(''); const initials=(p.nama||p.email||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); return '<h1 class="t">Profil saya</h1><p class="sub">Data akun, organisasi, jabatan, dan periode yang terhubung.</p><div class="card"><div class="profile-grid"><div><div id="profile-photo-preview" class="profile-photo">'+(p.foto_url?'<img src="'+esc(p.foto_url)+'" alt="Foto profil" style="width:100%;height:100%;object-fit:cover;border-radius:24px">':initials)+'</div><label for="profile-photo">Foto profil</label><input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp"><small>Maksimal 2 MB.</small></div><form id="profile-form" class="profile-list"><label>Nama lengkap</label><input id="profile-nama" value="'+esc(p.nama||'')+'" required><label>NIM</label><input id="profile-nim" value="'+esc(p.nim||'')+'"><label>Email akun</label><input id="profile-email" type="email" value="'+esc(S.user?.email||p.email||'')+'" required><small class="sub">Perubahan email dapat meminta konfirmasi email.</small><p class="err" id="profile-error"></p><button class="btn" type="submit">Simpan perubahan</button></form></div></div><div class="card"><h3>Organisasi dan jabatan</h3><div class="profile-list">'+(groups||'<p class="sub">Belum ada keanggotaan organisasi.</p>')+'</div></div><div class="card"><h3>Akses akun</h3><p>Jenis akun: <b>'+esc(roleLabel(p.tipe))+'</b></p><p>Status: <b>'+esc(p.status||'-')+'</b></p></div>'; }, audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
+ if(e.target.id==='bell'){
+   if(!S.notificationsLoaded) await loadNotifications();
+   const p=$('#notifyPanel'); if(p?.hidden) renderNotifications(); else if(p) p.hidden=true;
+   return;
+ }
+ if(e.target.id==='av'){ S.view='profil'; render(); return; }
+ if(e.target.id==='notif-read-all'){ await sb?.rpc('tandai_notifikasi_dibaca',{p_id:null}); await loadNotifications(); renderNotifications(); return; }
+ const nr=e.target.closest('[data-notif]');
+ if(nr){ await sb?.rpc('tandai_notifikasi_dibaca',{p_id:nr.dataset.notif}); await loadNotifications(); renderNotifications(); return; }
  const row=e.target.closest('[data-id]');
  if(row && row.dataset.go){S.selected=S.proker.find(p=>String(p.id)===String(row.dataset.id))||S.selected;if(row.dataset.go==='detail')S.view='detail';else if(row.dataset.go==='review')S.view='review';render();return}
  if(e.target.id==='submit-lpj'){
@@ -257,5 +296,38 @@ document.addEventListener('click',async e=>{
  if(e.target.id==='otp-verify'){try{await invokeFn('admin-otp',{action:'verify',email:$('#otp-email').value.trim(),code:$('#otp-code').value.trim()});$('#otp-result').textContent='OTP valid. Aktivitas Admin terverifikasi.';toast('OTP Admin berhasil diverifikasi.');}catch(ex){$('#otp-result').textContent=ex.message||String(ex);}return;}
 });
 document.addEventListener('submit',async e=>{
+ if(e.target.id==='profile-form'){
+   e.preventDefault();
+   const er=$('#profile-error'); er.textContent='';
+   const nama=$('#profile-nama').value.trim(), nim=$('#profile-nim').value.trim(), email=$('#profile-email').value.trim();
+   if(!nama) return er.textContent='Nama lengkap wajib diisi.';
+   try{
+     let authEmail=S.user.email;
+     if(email && email.toLowerCase()!==String(S.user.email||'').toLowerCase()){
+       const {data,error}=await sb.auth.updateUser({email});
+       if(error) throw error;
+       authEmail=data.user?.email||S.user.email;
+       if(String(authEmail).toLowerCase()!==email.toLowerCase()) toast('Permintaan perubahan email dikirim. Konfirmasi email baru diperlukan.');
+     }
+     let fotoPath=S.profile.foto_path||null;
+     const file=$('#profile-photo')?.files?.[0];
+     if(file){
+       if(file.size>2*1024*1024) throw new Error('Foto profil maksimal 2 MB.');
+       if(!['image/jpeg','image/png','image/webp'].includes(file.type)) throw new Error('Foto harus JPG, PNG, atau WebP.');
+       const ext=file.type==='image/jpeg'?'jpg':file.type.split('/')[1];
+       fotoPath=S.user.id+'/avatar-'+Date.now()+'.'+ext;
+       const up=await sb.storage.from('profile-avatars').upload(fotoPath,file,{contentType:file.type,upsert:false});
+       if(up.error) throw up.error;
+     }
+     const {data:upd,error}=await sb.rpc('update_profile_me',{p_nama:nama,p_nim:nim||null,p_foto_path:fotoPath,p_email:authEmail});
+     if(error) throw error;
+     S.profile=upd||{...S.profile,nama,nim,email:authEmail,foto_path:fotoPath};
+     if(fotoPath){const {data:signed}=await sb.storage.from('profile-avatars').createSignedUrl(fotoPath,3600);S.profile.foto_url=signed?.signedUrl||'';}
+     toast('Profil berhasil diperbarui.'); render();
+   }catch(ex){er.textContent=ex.message||String(ex);}
+   return;
+ }
  if(e.target.id==='cp'){e.preventDefault();const a=$('#newpw').value,b=$('#newpw2').value,er=$('#cpe');er.textContent='';if(a.length<8)return er.textContent='Kata sandi minimal 8 karakter.';if(a!==b)return er.textContent='Konfirmasi kata sandi tidak sama.';const {error}=await sb.auth.updateUser({password:a,user_metadata:{...S.user.user_metadata,must_change_password:false}});if(error)return er.textContent=error.message;S.user.user_metadata={...S.user.user_metadata,must_change_password:false};toast('Kata sandi berhasil diganti.');S.view='beranda';render();}
 });
+
+setInterval(()=>{ if(!$('#app')?.hidden && S.user?.id) loadNotifications(); },60000);
