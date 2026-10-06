@@ -731,9 +731,43 @@ document.addEventListener('submit',async e=>{
 
 if(sb){
   sb.auth.onAuthStateChange((event,session)=>{
+    if(event==='SIGNED_OUT'){
+      resetClientState();
+      $('#app').hidden=true;
+      $('#login').hidden=false;
+      showAuthPanel('login');
+      return;
+    }
     if(event==='PASSWORD_RECOVERY'&&session){
+      resetClientState();
       S.user={...session.user,nama:session.user.user_metadata?.nama||session.user.email};
-      $('#login').hidden=true;$('#app').hidden=false;S.view='reset-password';render();
+      $('#login').hidden=true;
+      $('#app').hidden=false;
+      S.view='reset-password';
+      render();
+      return;
+    }
+    if(event==='SIGNED_IN'&&session){
+      const nextId=session.user.id;
+      if(S.user?.id && S.user.id!==nextId) resetClientState();
+      S.user={...session.user,nama:session.user.user_metadata?.nama||session.user.user_metadata?.name||session.user.email};
+      setTimeout(async()=>{
+        try{
+          await loadUserAccessContext();
+          await loadNotifications();
+          await loadCollaborations();
+          await loadProker();
+          if(S.profile?.status==='menunggu') S.view='menunggu';
+          else if(S.profile?.status==='ditolak') S.view='ditolak';
+          else if(S.user?.user_metadata?.must_change_password) S.view='change-password';
+          else if(!S.view||['menunggu','ditolak','change-password'].includes(S.view)) S.view='beranda';
+          $('#login').hidden=true;
+          $('#app').hidden=false;
+          render();
+        }catch(ex){
+          $('#le').textContent=ex.message||'Gagal memuat akun.';
+        }
+      },0);
     }
   });
 }
