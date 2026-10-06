@@ -161,22 +161,30 @@ function showAuthPanel(mode){
 }
 async function loadOrganizations(){
   if(!sb) return;
-  const [{data:orgs,error:oe},{data:periods,error:pe}]=await Promise.all([
-    sb.from('organisasi').select('id,nama,tipe,aktif,periode_id,periode:periode_id(id,nama,status)').order('nama'),
+  const [{data:raw,error:oe},{data:periods,error:pe}]=await Promise.all([
+    sb.rpc('admin_list_organisasi'),
     sb.from('periode').select('id,nama,status,batas_lpj').order('nama')
   ]);
   if(oe){toast('Gagal memuat organisasi: '+oe.message);return;}
   if(pe){toast('Gagal memuat periode: '+pe.message);return;}
-  S.organizations=orgs||[]; S.periods=periods||[];
+  S.organizations=(raw||[]).map(o=>({
+    id:o.id,nama:o.nama,tipe:o.tipe,aktif:o.aktif,periode_id:o.periode_id,
+    periode:{id:o.periode_id,nama:o.periode_nama,status:o.periode_status}
+  }));
+  S.periods=periods||[];
 }
 async function loadApprovalQueue(){
   if(S.profile?.tipe!=='admin') return;
   const box=$('#pending-users');
   if(!box) return;
-  const [{data:pending,error:pe},{data:orgs,error:oe}]=await Promise.all([
+  const [{data:pending,error:pe},{data:rawOrgs,error:oe}]=await Promise.all([
     sb.from('profiles').select('id,nama,email,nim,status').in('status',['menunggu','ditolak']).order('nama',{ascending:true}),
-    sb.from('organisasi').select('id,nama,tipe,aktif,periode_id,periode:periode_id(nama,status)').order('nama')
+    sb.rpc('admin_list_organisasi')
   ]);
+  const orgs=(rawOrgs||[]).map(o=>({
+    id:o.id,nama:o.nama,tipe:o.tipe,aktif:o.aktif,periode_id:o.periode_id,
+    periode:{nama:o.periode_nama,status:o.periode_status}
+  }));
   if(pe){box.innerHTML='<p class="err">'+esc(pe.message)+'</p>';return;}
   if(oe){box.innerHTML='<p class="err">'+esc(oe.message)+'</p>';return;}
 
