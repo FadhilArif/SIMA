@@ -432,7 +432,11 @@ document.addEventListener('click',async e=>{
  await uploadDriveFile({proker_id:p.id,dokumen_id:dok.id,kind:'document',file:pdf});
  for(let i=0;i<files.length;i++){await uploadDriveFile({proker_id:p.id,dokumen_id:dok.id,kind:'photo',file:files[i],urutan:i+1});}
  const cert=$('#lpj-drive')?.value.trim();if(cert){if(!/^https:\/\/(drive\.google\.com|docs\.google\.com)\//.test(cert))throw new Error('Tautan sertifikat harus dari Google Drive atau Google Docs.');const {error:te}=await sb.from('tautan_drive').insert({proker_id:p.id,jenis:'sertifikat',url:cert,keterangan:'Sertifikat LPJ'});if(te)throw te;}
- const {error:ue}=await sb.from('dokumen').update({status:'diajukan'}).eq('id',dok.id);if(ue)throw ue;toast('LPJ dan seluruh berkas berhasil diunggah.');S.view='detail';render();
+ const batas=p.batas_lpj ? new Date(p.batas_lpj+'T23:59:59') : null;
+ const terlambat=!!(batas && new Date()>batas);
+ const {error:ue}=await sb.from('dokumen').update({status:terlambat?'diajukan_terlambat':'diajukan'}).eq('id',dok.id);if(ue)throw ue;
+ if(terlambat) await sb.from('notifikasi').insert({akun_id:S.user.id,organisasi_id:p.organisasi_id,pesan:'LPJ diajukan setelah batas 7 hari dan ditandai terlambat.'});
+ toast(terlambat?'LPJ berhasil diunggah dan ditandai terlambat.':'LPJ dan seluruh berkas berhasil diunggah.');S.view='detail';render();
  }catch(ex){err.textContent=ex.message||String(ex);}finally{btn.disabled=false;btn.textContent='Ajukan LPJ';}return;
 }
 });
