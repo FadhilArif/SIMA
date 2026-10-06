@@ -45,10 +45,11 @@ Object.assign(V,{
   function cardX(b){return '<section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">'+b+'</section>';}
   function tableX(h,r){return '<div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm"><table class="min-w-full text-sm"><thead class="bg-slate-50"><tr>'+h.map(x=>'<th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">'+x+'</th>').join('')+'</tr></thead><tbody class="divide-y divide-slate-100">'+r+'</tbody></table></div>';}
 
-  MENU_MAP.bph[0][1]=[['beranda','Beranda'],['dashboard','Dashboard'],['proker','Semua proker'],['inbox','Inbox review'],['rapat','Rapat'],['galeri','Galeri pemantau'],['kalender','Kalender'],['plafon','Anggaran'],['struktur','Struktur BEM']];
-  MENU_MAP.pembimbing[0][1]=[['beranda','Beranda'],['dashboard','Dashboard organisasi'],['inbox','Inbox review'],['cair','Pencairan dan verifikasi'],['proker','Proker'],['galeri','Galeri']];
-  MENU_MAP.wakil_rektor[0][1]=[['beranda','Beranda'],['dashboard','Dashboard'],['plafon','Plafon'],['cair','Anggaran & pencairan'],['inbox','Inbox tahap BEM'],['proker','Semua proker'],['galeri','Galeri pemantau'],['audit','Jejak audit']];
-  MENU_MAP.staf_keuangan[0][1]=[['dashboard','Dashboard anggaran'],['plafon','Plafon']];
+  MENU_MAP.organisasi[0][1]=[['beranda','Beranda'],['proker','Proker'],['undangan','Undangan kolaborasi'],['galeri','Galeri'],['laporan','Laporan akhir'],['struktur','Struktur dan anggota'],['profil','Profil saya']];
+  MENU_MAP.bph[0][1]=[['beranda','Beranda'],['dashboard','Dashboard'],['proker','Semua proker'],['inbox','Inbox review'],['rapat','Rapat'],['galeri','Galeri pemantau'],['kalender','Kalender'],['plafon','Anggaran'],['struktur','Struktur BEM'],['profil','Profil saya']];
+  MENU_MAP.pembimbing[0][1]=[['beranda','Beranda'],['dashboard','Dashboard organisasi'],['inbox','Inbox review'],['cair','Pencairan dan verifikasi'],['proker','Proker'],['galeri','Galeri'],['profil','Profil saya']];
+  MENU_MAP.wakil_rektor[0][1]=[['beranda','Beranda'],['dashboard','Dashboard'],['plafon','Plafon'],['cair','Anggaran & pencairan'],['inbox','Inbox tahap BEM'],['proker','Semua proker'],['galeri','Galeri pemantau'],['audit','Jejak audit'],['profil','Profil saya']];
+  MENU_MAP.staf_keuangan[0][1]=[['dashboard','Dashboard anggaran'],['plafon','Plafon'],['profil','Profil saya']];
 
   async function refresh(v){await hydrate(v);if(S.view===v)render();}
   document.addEventListener('click',async function(e){
@@ -91,3 +92,5 @@ Object.assign(V,{
   setInterval(()=>{if(S.view==='cair')sourceOptions();},1000);
 })();
   if(sb){sb.auth.onAuthStateChange(function(event){if(event==='SIGNED_IN')setTimeout(function(){refresh('beranda');},0);});}
+
+MENU_MAP.admin[0][1]=[['periode','Periode'],['akun','Akun dan penetapan'],['audit','Jejak audit'],['profil','Profil saya']];
