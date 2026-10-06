@@ -437,6 +437,8 @@ drop policy if exists periode_read on periode; create policy periode_read on per
 
 drop policy if exists periode_write on periode; create policy periode_write on periode for all to authenticated using(lihat_semua()) with check(lihat_semua());
 drop policy if exists organisasi_read on organisasi; create policy organisasi_read on organisasi for select using(id in(select org_saya()) or id in(select org_binaan()) or lihat_semua());
+
+drop policy if exists organisasi_write on organisasi; create policy organisasi_write on organisasi for all to authenticated using(lihat_semua()) with check(lihat_semua());
 drop policy if exists unit_read on unit_kerja; create policy unit_read on unit_kerja for select using(auth.uid() is not null);
 drop policy if exists keanggotaan_read on keanggotaan; create policy keanggotaan_read on keanggotaan for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
 drop policy if exists koordinator_read on penugasan_koordinator; create policy koordinator_read on penugasan_koordinator for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
