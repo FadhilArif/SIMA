@@ -344,7 +344,11 @@ document.addEventListener('click',async e=>{
    const out=$('#aa-csv-result'); e.target.disabled=true; e.target.textContent='Membuat akun...';
    try{
      const r=await invokeFn('admin-account-csv',{action:'commit',csv:S.aaCsv||''});
-     out.textContent='Selesai: '+r.created+' akun dibuat, '+r.skipped+' dilewati.';
+     const made=(r.results||[]).filter(x=>x.status==='sukses');
+     const failed=(r.results||[]).filter(x=>x.status==='error');
+     out.innerHTML='<b>Selesai: '+r.created+' akun dibuat, '+r.skipped+' dilewati.</b>'+
+       (made.length?'<div style="margin-top:10px">'+made.map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+'</small><br><b>Password sementara:</b> <code>'+esc(x.password)+'</code></div>').join('')+'</div>':'')+
+       (failed.length?'<div style="margin-top:10px"><b>Yang gagal:</b><br>'+failed.map(x=>'Baris '+x.nomor_baris+' · '+esc(x.nama||x.email||'-')+': '+esc(x.pesan||'Tidak diketahui')).join('<br>')+'</div>':'');
      loadInitialAccounts().then(rows=>{const list=$('#aa-list');if(list)list.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+'</small></div>').join('')||'<p class="sub">Belum ada akun selain Admin.</p>';});
    }catch(ex){out.textContent=ex.message||String(ex);}
    finally{e.target.disabled=false;e.target.textContent='Buat semua akun';}
