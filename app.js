@@ -572,6 +572,26 @@ if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
  if(e.target.id==='show-forgot'){showAuthPanel('forgot');return;}
  if(e.target.id==='back-login'||e.target.id==='back-login-2'){showAuthPanel('login');return;}
  if(e.target.id==='pending-logout'){await sb?.auth.signOut();S.user={nama:'',email:''};S.profile={tipe:'mahasiswa',status:null};S.ctxs=[];S.orgId=null;$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
+ const addAssignment=e.target.closest('[data-add-assignment]');
+ if(addAssignment){
+   const card=addAssignment.closest('[data-pending]');
+   const list=card?.querySelector('[data-assignment-list]');
+   const first=list?.querySelector('[data-assignment-row]');
+   if(list&&first){
+     const clone=first.cloneNode(true);
+     clone.querySelector('[data-assignment-org]').value='';
+     clone.querySelector('[data-assignment-jabatan]').value='Anggota';
+     list.appendChild(clone);
+   }
+   return;
+ }
+ const removeAssignment=e.target.closest('[data-remove-assignment]');
+ if(removeAssignment){
+   const card=removeAssignment.closest('[data-pending]');
+   const rows=card?.querySelectorAll('[data-assignment-row]');
+   if(rows?.length>1) removeAssignment.closest('[data-assignment-row]').remove();
+   return;
+ }
  const approve=e.target.closest('[data-approve-user]');
  if(approve){const card=approve.closest('[data-pending]');await approvePending(approve.dataset.approveUser,card);return;}
  const reject=e.target.closest('[data-reject-user]');
