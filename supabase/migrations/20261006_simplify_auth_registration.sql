@@ -50,20 +50,6 @@ to authenticated
 using(public.lihat_semua())
 with check(public.lihat_semua());
 
-drop policy if exists tautan_drive_write on public.tautan_drive;
-create policy tautan_drive_write
-on public.tautan_drive
-for insert
-to authenticated
-with check(
-  proker_id in (
-    select id
-    from public.proker
-    where organisasi_id in(select public.pengurus_inti())
-  )
-);
-
-
 drop policy if exists notifikasi_admin_write on public.notifikasi;
 create policy notifikasi_admin_write
 on public.notifikasi
