@@ -236,7 +236,7 @@ const V = {
   beranda: () => `<h1 class="t">Beranda</h1><p class="sub">Ringkasan aktivitas dari semua konteks Anda.</p>
   <div class="card"><h3>Belum ada data</h3><p class="sub">${S.ctxs.length ? 'Belum ada aktivitas, pengajuan, atau anggaran untuk konteks ini.' : 'Belum ada organisasi atau periode yang ditetapkan ke akun ini.'}</p></div>`,
   proker() {
-    const f = S.proker.filter(p => (S.tab === 'semua' || p.status === S.tab) && p.nama.toLowerCase().includes(S.q.toLowerCase()));
+    const q=S.q.toLowerCase(); const f = S.proker.filter(p => (S.tab === 'semua' || p.status === S.tab) && ((p.nama||'').toLowerCase().includes(q) || (p.ketua||'').toLowerCase().includes(q)));
     const tabs = [['semua','Semua'],['draft','Draft'],['proposal_diajukan','Menunggu review'],['revisi','Revisi'],['disetujui','Disetujui'],['berjalan','Berjalan']];
     return `<h1 class="t">Daftar program kerja</h1><p class="sub">Kelola program kerja organisasi Anda.</p>
     <div class="bar2"><input id="q" placeholder="Cari proker atau ketua" value="${S.q}"><button class="btn" data-go="form">+ Buat proker</button></div>
