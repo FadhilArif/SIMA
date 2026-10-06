@@ -4,7 +4,7 @@ SIMA MHS — Sistem Informasi dan Manajemen Organisasi Mahasiswa.
 
 ## Struktur
 - `index.html`, `style.css`, `app.js`: web statis desktop + mobile.
-- `schema.sql`: schema PostgreSQL + RLS + storage thumbnail + OTP admin.
+- `schema.sql`: schema PostgreSQL + RLS + OTP admin; file utama disimpan di Google Drive API.
 - `supabase/functions/`: Edge Functions untuk Google Drive, SMTP, impor CSV, dan OTP Admin.
 
 ## Setup Supabase
@@ -29,14 +29,16 @@ Jangan masukkan secret ke GitHub atau `app.js`. Supabase menyediakan secret envi
 
 Template aman ada di `supabase/functions/.env.example`.
 
-## Google Drive
-1. Buat Google Cloud project dan aktifkan Google Drive API.
-2. Buat Service Account.
-3. Buat satu folder root di Drive institusi.
-4. **Disarankan:** gunakan Shared Drive institusi dan beri Service Account akses yang diperlukan. Service Account tidak memiliki kuota penyimpanan Drive pribadi. Alternatif untuk Google Workspace adalah memakai delegasi domain dan isi `GOOGLE_SUBJECT` dengan email akun institusi.
-5. Simpan email Service Account, private key, dan folder ID sebagai Edge Function secrets.
-6. Function akan membuat struktur: **Periode / Organisasi / Proker / Dokumen|Foto**.
-7. Browser meminta sesi resumable upload ke Edge Function lalu mengunggah langsung ke Drive; metadata disimpan di Supabase.
+## Google Drive API — storage utama SIMA
+1. Buat Google Cloud project dan aktifkan **Google Drive API**.
+2. Buat **Service Account** dan buat key JSON. Dari JSON, ambil `client_email` → `GOOGLE_CLIENT_EMAIL` dan `private_key` → `GOOGLE_PRIVATE_KEY`.
+3. Buat folder root khusus SIMA di Google Drive institusi. Untuk organisasi, **Shared Drive** lebih disarankan; beri Service Account akses ke folder/Shared Drive tersebut.
+4. Isi ID folder root sebagai `GOOGLE_DRIVE_ROOT_FOLDER_ID`. `GOOGLE_SUBJECT` hanya diperlukan jika memakai Google Workspace Domain-Wide Delegation; jika tidak, kosongkan.
+5. Function membuat struktur otomatis: **Periode / Organisasi / Proker / Dokumen|Foto**.
+6. Browser meminta sesi resumable upload dari Edge Function, lalu file dikirim langsung ke URL upload Google Drive. Google mendukung resumable upload untuk file besar dan koneksi yang rawan terputus. urlDokumentasi upload Google Drive APIhttps://developers.google.com/workspace/drive/api/guides/manage-uploads
+7. Supabase hanya menyimpan metadata file (`drive_file_id`, nama, ukuran, checksum), bukan file utama.
+
+**Catatan:** Google Drive API tetap memakai Google Cloud project untuk mengaktifkan API dan membuat kredensial. Private key/service-account credential tidak boleh dimasukkan ke frontend.
 
 ## Deploy Edge Functions
 Dengan Supabase CLI:
@@ -55,10 +57,10 @@ Jangan pernah menaruh secret/service-role key di frontend. Browser hanya memakai
 
 ## Alur yang sudah dihubungkan
 - LPJ → PDF ke Google Drive.
-- LPJ → 1–10 foto ke Google Drive + thumbnail ke Supabase Storage.
+- LPJ → PDF + 1–10 foto langsung ke Google Drive.
 - CSV → preview → commit → pembuatan Auth/profile/keanggotaan → email kredensial sementara.
 - Admin → OTP email operator → audit.
 - Akun hasil impor membawa `must_change_password=true` dan dipaksa mengganti password saat login pertama.
 
 ## Catatan
-Integrasi eksternal belum dapat dianggap live sampai secret Google/SMTP diisi dan Edge Functions dideploy ke project Supabase. Setelah itu lakukan uji satu organisasi dengan file dummy.
+Integrasi Google Drive belum dapat dianggap live sampai secret Google diisi, folder Drive dibagikan ke Service Account, dan Edge Functions dideploy ke project Supabase. Setelah itu lakukan uji satu organisasi dengan satu PDF dan beberapa foto dummy.
