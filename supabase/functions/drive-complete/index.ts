@@ -10,8 +10,11 @@ export default {
       const { proker_id, dokumen_id, kind, drive_file_id, urutan = 1, thumb_path = null } = body;
       if (!proker_id || !drive_file_id || !kind) return json({ error: "Konfirmasi upload tidak lengkap." }, 400);
 
-      const { data: p } = await ctx.supabaseAdmin.from("proker").select("id,organisasi_id").eq("id", proker_id).maybeSingle();
+      const { data: p } = await ctx.supabaseAdmin.from("proker").select("id,organisasi_id,organisasi:organisasi_id(periode:periode_id(status))").eq("id", proker_id).maybeSingle();
       if (!p) return json({ error: "Proker tidak ditemukan." }, 404);
+      if (p.organisasi?.periode?.status === "ditutup") {
+        return json({ error: "Periode sudah ditutup; konfirmasi upload ditolak." }, 403);
+      }
       const { data: member } = await ctx.supabaseAdmin
         .from("keanggotaan")
         .select("id,jabatan")
