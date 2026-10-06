@@ -143,6 +143,7 @@ Deno.serve(async(req)=>{
 
   try{
     const {supabase,user}=await getRequestUser(req);
+    const adminUserId=user.id;
 
     const {data:admin,error:adminError}=await supabase
       .from("profiles")
@@ -379,7 +380,7 @@ Deno.serve(async(req)=>{
         });
 
         await supabase.from("jejak_audit").insert({
-          akun_id:user.id,
+          akun_id:adminUserId,
           sebagai:"Admin",
           aksi:"akun_awal_dibuat_csv",
           objek:"profiles",
