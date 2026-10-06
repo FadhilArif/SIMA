@@ -299,13 +299,26 @@ document.addEventListener('submit', async e => {
     if(pw!==pw2) return er.textContent='Konfirmasi password tidak sama.';
     const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{nama,nim}}});
     if(error){er.textContent=error.message;return;}
-    if(data.session&&data.user){
-      S.user={...data.user,nama,nim};
-      try{await loadUserAccessContext();}catch(ex){er.textContent=ex.message||'Gagal menyiapkan ruang tunggu.';return;}
-      $('#login').hidden=true;$('#app').hidden=false;S.view=S.profile.status==='ditolak'?'ditolak':'menunggu';render();
-    }else{
-      er.textContent='Pendaftaran berhasil. Cek email untuk menyelesaikan pendaftaran jika verifikasi email diaktifkan.';
+    if(!data.user){er.textContent='Pendaftaran gagal: Supabase tidak mengembalikan user.';return;}
+    if(!data.session){
+      er.textContent='Akun berhasil dibuat. Konfirmasi email diperlukan sebelum masuk ruang tunggu.';
+      return;
     }
+    const {error:profileError}=await sb.from('profiles').upsert({
+      id:data.user.id,
+      nama,
+      email,
+      nim,
+      tipe:'mahasiswa',
+      status:'menunggu'
+    },{onConflict:'id'});
+    if(profileError){
+      er.textContent='Akun berhasil dibuat, tetapi profil ruang tunggu gagal disimpan: '+profileError.message;
+      return;
+    }
+    S.user={...data.user,nama,nim};
+    try{await loadUserAccessContext();}catch(ex){er.textContent=ex.message||'Gagal menyiapkan ruang tunggu.';return;}
+    $('#login').hidden=true;$('#app').hidden=false;S.view=S.profile.status==='ditolak'?'ditolak':'menunggu';render();
     return;
   }
   if(e.target.id==='frp'){
