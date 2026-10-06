@@ -80,7 +80,7 @@ create table if not exists proker (
 create table if not exists proker_kolaborator (
  proker_id uuid not null references proker(id) on delete cascade,
  organisasi_id uuid not null references organisasi(id), status text not null default 'diundang',
- porsi_plafon bigint not null default 0 check(porsi_plafon>=0),
+ porsi_plafon bigint not null default 0 check(porsi_plafon>=0), komentar text,
  dikonfirmasi_oleh uuid references profiles(id), primary key(proker_id,organisasi_id)
 );
 create table if not exists dokumen (
@@ -443,6 +443,18 @@ drop policy if exists club_read on anggota_club; create policy club_read on angg
 drop policy if exists proker_read on proker; create policy proker_read on proker for select using(organisasi_id in(select org_saya()) or organisasi_id in(select org_binaan()) or lihat_semua());
 drop policy if exists proker_write on proker; create policy proker_write on proker for all using(organisasi_id in(select pengurus_inti()) and organisasi_periode_aktif(organisasi_id)) with check(organisasi_id in(select pengurus_inti()) and organisasi_periode_aktif(organisasi_id));
 drop policy if exists kolab_read on proker_kolaborator; create policy kolab_read on proker_kolaborator for select using(organisasi_id in(select org_saya()) or proker_id in(select id from proker where organisasi_id in(select org_saya())) or lihat_semua());
+
+drop policy if exists kolab_write on proker_kolaborator;
+create policy kolab_write on proker_kolaborator
+for all using(
+  organisasi_id in(select org_saya())
+  or proker_id in(select id from proker where organisasi_id in(select pengurus_inti()))
+  or lihat_semua()
+) with check(
+  organisasi_id in(select org_saya())
+  or proker_id in(select id from proker where organisasi_id in(select pengurus_inti()))
+  or lihat_semua()
+);
 drop policy if exists dokumen_read on dokumen; create policy dokumen_read on dokumen for select using(organisasi_id in(select org_saya()) or organisasi_id in(select org_binaan()) or lihat_semua());
 drop policy if exists dokumen_write on dokumen; create policy dokumen_write on dokumen for all using(organisasi_id in(select pengurus_inti()) and organisasi_periode_aktif(organisasi_id)) with check(organisasi_id in(select pengurus_inti()) and organisasi_periode_aktif(organisasi_id));
 drop policy if exists sumber_read on sumber_dana; create policy sumber_read on sumber_dana for select using(auth.uid() is not null);
