@@ -1,5 +1,6 @@
 import { withSupabase } from "npm:@supabase/server@^1";
 import { json, options } from "../_shared/http.ts";
+import { sendAccountEmail } from "../_shared/google-mail.ts";
 
 function parseCsv(input:string){
   const rows:string[][]=[]; let row:string[]=[]; let cell=""; let quoted=false;
@@ -203,6 +204,13 @@ export default {
             mentorId=m.id;
           }
 
+          const mail = await sendAccountEmail({
+            name:r.nama,
+            email:r.email,
+            password,
+            role:r.kind
+          });
+
           await ctx.supabaseAdmin.from("jejak_audit").insert({
             akun_id:ctx.user.id,
             sebagai:"Admin",
@@ -213,12 +221,19 @@ export default {
               nama:r.nama,
               email:r.email,
               kind:r.kind,
-              organisasi_id
+              organisasi_id,
+              email_status:mail.sent ? "terkirim" : "belum_terkirim"
             }
           });
 
           created++;
-          results.push({...r,status:"sukses",password});
+          results.push({
+            ...r,
+            status:"sukses",
+            password,
+            email_sent:mail.sent,
+            email_message:mail.sent ? "Kredensial dikirim via Google Apps Script." : mail.reason
+          });
         }catch(e){
           if(mentorId)await ctx.supabaseAdmin.from("pembimbing_organisasi").delete().eq("id",mentorId);
           if(membershipId)await ctx.supabaseAdmin.from("keanggotaan").delete().eq("id",membershipId);
