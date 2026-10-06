@@ -80,25 +80,130 @@ export default {
         const { data: rows } = await ctx.supabaseAdmin.from("impor_csv_baris").select("*").eq("impor_id",impor_id).order("nomor_baris");
         let created=0, skipped=0; const results=[];
         for (const r of rows || []) {
-          if (r.status === "error" || !r.email || !r.nama) { skipped++; continue; }
-          const password = randomPassword();
-          const { data: u, error: ue } = await ctx.supabaseAdmin.auth.admin.createUser({
-            email:r.email, password, email_confirm:true,
-            user_metadata:{ nama:r.nama, must_change_password:true },
-          });
-          if (ue) { results.push({baris:r.nomor_baris,email:r.email,status:"error",pesan:ue.message}); skipped++; continue; }
-          const { error: pe } = await ctx.supabaseAdmin.from("profiles").insert({id:u.user.id,nim:r.nim,nama:r.nama,email:r.email,tipe:"mahasiswa"});
-          if (pe) { await ctx.supabaseAdmin.auth.admin.deleteUser(u.user.id); results.push({baris:r.nomor_baris,email:r.email,status:"error",pesan:pe.message}); skipped++; continue; }
-          const { error: ke } = await ctx.supabaseAdmin.from("keanggotaan").insert({akun_id:u.user.id,organisasi_id,jabatan:r.jabatan||"Anggota",status:"aktif",ditetapkan_oleh:ctx.user.id});
-          if (ke) { results.push({baris:r.nomor_baris,email:r.email,status:"error",pesan:ke.message}); skipped++; continue; }
-          await transport.sendMail({
-            from:Deno.env.get("SMTP_FROM")!, to:r.email, subject:"Akun SIMA MHS Anda",
-            text:"Halo "+r.nama+"\n\nAkun SIMA MHS telah dibuat.\nEmail: "+r.email+"\nKata sandi sementara: "+password+"\n\nLogin pertama wajib mengganti kata sandi.\n",
-            html:"<p>Halo "+r.nama+"</p><p>Akun SIMA MHS telah dibuat.</p><p><b>Email:</b> "+r.email+"<br><b>Kata sandi sementara:</b> "+password+"</p><p>Login pertama wajib mengganti kata sandi.</p>",
-          });
-          await ctx.supabaseAdmin.from("impor_csv_baris").update({status:"sukses",hasil:"akun dibuat",akun_id:u.user.id}).eq("id",r.id);
-          results.push({baris:r.nomor_baris,email:r.email,status:"sukses"}); created++;
+        if (r.status === "error" || !r.email || !r.nama) {
+          skipped++;
+          continue;
         }
+
+        const password = randomPassword();
+        let userId = null;
+        let profileMade = false;
+        let membershipMade = false;
+
+        try {
+          const { data: u, error: ue } =
+            await ctx.supabaseAdmin.auth.admin.createUser({
+              email: r.email,
+              password,
+              email_confirm: true,
+              user_metadata: {
+                nama: r.nama,
+                must_change_password: true,
+              },
+            });
+
+          if (ue) throw ue;
+          userId = u.user.id;
+
+          const { error: pe } =
+            await ctx.supabaseAdmin.from("profiles").insert({
+              id: userId,
+              nim: r.nim,
+              nama: r.nama,
+              email: r.email,
+              tipe: "mahasiswa",
+              status: "aktif",
+            });
+
+          if (pe) throw pe;
+          profileMade = true;
+
+          const { error: ke } =
+            await ctx.supabaseAdmin.from("keanggotaan").insert({
+              akun_id: userId,
+              organisasi_id,
+              jabatan: r.jabatan || "Anggota",
+              status: "aktif",
+              ditetapkan_oleh: ctx.user.id,
+            });
+
+          if (ke) throw ke;
+          membershipMade = true;
+
+          await transport.sendMail({
+            from: Deno.env.get("SMTP_FROM")!,
+            to: r.email,
+            subject: "Akun SIMA MHS Anda",
+            text:
+              "Halo " + r.nama + "\n\n" +
+              "Akun SIMA MHS telah dibuat.\n" +
+              "Email: " + r.email + "\n" +
+              "Kata sandi sementara: " + password + "\n\n" +
+              "Login pertama wajib mengganti kata sandi.\n",
+            html:
+              "<p>Halo " + r.nama + "</p>" +
+              "<p>Akun SIMA MHS telah dibuat.</p>" +
+              "<p><b>Email:</b> " + r.email +
+              "<br><b>Kata sandi sementara:</b> " + password +
+              "</p><p>Login pertama wajib mengganti kata sandi.</p>",
+          });
+
+          const { error: markError } =
+            await ctx.supabaseAdmin.from("impor_csv_baris")
+              .update({
+                status: "sukses",
+                hasil: "akun dibuat",
+                akun_id: userId,
+              })
+              .eq("id", r.id);
+
+          if (markError) throw markError;
+
+          results.push({
+            baris: r.nomor_baris,
+            email: r.email,
+            status: "sukses",
+          });
+          created++;
+        } catch (e) {
+          if (membershipMade && userId) {
+            await ctx.supabaseAdmin
+              .from("keanggotaan")
+              .delete()
+              .eq("akun_id", userId)
+              .eq("organisasi_id", organisasi_id);
+          }
+
+          if (profileMade && userId) {
+            await ctx.supabaseAdmin
+              .from("profiles")
+              .delete()
+              .eq("id", userId);
+          }
+
+          if (userId) {
+            await ctx.supabaseAdmin.auth.admin.deleteUser(userId);
+          }
+
+          const message = e instanceof Error ? e.message : String(e);
+          await ctx.supabaseAdmin.from("impor_csv_baris")
+            .update({
+              status: "error",
+              hasil: "gagal",
+              pesan: message,
+            })
+            .eq("id", r.id);
+
+          results.push({
+            baris: r.nomor_baris,
+            email: r.email,
+            status: "error",
+            pesan: message,
+          });
+          skipped++;
+        }
+      }
+
         await ctx.supabaseAdmin.from("impor_csv").update({status:"selesai"}).eq("id",impor_id);
         return json({ok:true,created,skipped,results});
       }
