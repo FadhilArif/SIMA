@@ -302,7 +302,30 @@ document.addEventListener('submit', async e => {
 });
 
 
-async function invokeFn(name,body){if(!sb)throw new Error('Supabase belum dikonfigurasi.');const {data,error}=await sb.functions.invoke(name,{body});if(error)throw error;if(data?.error)throw new Error(data.error);return data;}
+async function invokeFn(name,body){
+  if(!sb)throw new Error('Supabase belum dikonfigurasi.');
+  const {data,error}=await sb.functions.invoke(name,{body});
+  if(error){
+    let detail=error.message||'Edge Function gagal.';
+    try{
+      const res=error.context;
+      if(res && typeof res.clone==='function'){
+        const text=await res.clone().text();
+        if(text){
+          try{
+            const parsed=JSON.parse(text);
+            detail=parsed.error||parsed.message||detail;
+          }catch(_){
+            detail=text||detail;
+          }
+        }
+      }
+    }catch(_){}
+    throw new Error(detail);
+  }
+  if(data?.error)throw new Error(data.error);
+  return data;
+}
 async function uploadDriveFile({proker_id,dokumen_id,kind,file,urutan=1}){const init=await invokeFn('drive-init',{proker_id,dokumen_id,kind,filename:file.name,mime:file.type,size:file.size});const put=await fetch(init.upload_url,{method:'PUT',headers:{'Content-Type':file.type},body:file});if(!put.ok)throw new Error('Upload Google Drive gagal ('+put.status+').');let driveFile={};try{driveFile=await put.json();}catch(_){}if(!driveFile.id){const loc=put.headers.get('Location');if(loc)driveFile.id=loc.split('/').pop();}if(!driveFile.id)throw new Error('Google Drive tidak mengembalikan file id.');return invokeFn('drive-complete',{proker_id,dokumen_id,kind,drive_file_id:driveFile.id,urutan});}
 async function loadMembershipContext(){ return loadUserAccessContext(); }
 Object.assign(V,{
