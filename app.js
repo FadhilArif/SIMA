@@ -408,7 +408,7 @@ document.addEventListener('click',async e=>{
  const approve=e.target.closest('[data-approve-user]');
  if(approve){const card=approve.closest('[data-pending]');await approvePending(approve.dataset.approveUser,card);return;}
  const reject=e.target.closest('[data-reject-user]');
- if(reject){const id=reject.dataset.rejectUser;await sb.from('profiles').update({status:'ditolak',updated_at:new Date().toISOString()}).eq('id',id);toast('Pendaftaran ditolak.');loadApprovalQueue();return;}
+ if(reject){const id=reject.dataset.rejectUser;const {error}=await sb.from('profiles').update({status:'ditolak'}).eq('id',id);if(error){toast(error.message);return;}await sb.from('notifikasi').insert({akun_id:id,pesan:'Pendaftaran akun Anda belum disetujui. Hubungi Admin Sistem untuk informasi lebih lanjut.'});toast('Pendaftaran ditolak.');loadApprovalQueue();return;}
  if(e.target.id==='bell'){
    if(!S.notificationsLoaded) await loadNotifications();
    const p=$('#notifyPanel'); if(p?.hidden) renderNotifications(); else if(p) p.hidden=true;
