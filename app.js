@@ -4,13 +4,7 @@ const sb = SUPABASE_URL && window.supabase ? supabase.createClient(SUPABASE_URL,
 const $ = s => document.querySelector(s), $$ = (s,r=document) => [...r.querySelectorAll(s)], rp = n => 'Rp' + Number(n || 0).toLocaleString('id-ID'), esc = v => String(v ?? '').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]));
 const ST = { draft:['Draft',''], proposal_diajukan:['Menunggu review','wa'], revisi:['Revisi','er'], disetujui:['Disetujui','ok'], berjalan:['Berjalan','ok'], selesai:['Selesai','bl'], tidak_terlaksana:['Tidak terlaksana','er'] };
 function currentContext(){ return S.ctxs[S.ctx] || S.ctxs[0] || {org:'Organisasi',peran:'Pengguna'}; }
-const S = { user:{ nama:'Fadhli Arif', email:'fadhli@stikesmhk.ac.id' }, ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
-  ctxs:[{ org:'HIMIKA', peran:'Ketua · 2026/2027', review:false }, { org:'Koordinator RACANA', peran:'Review', review:true }],
-  proker:[{ id:1, nama:'Pelatihan Kader Dasar', ketua:'Andi Pratama', jenis:'mandiri', mulai:'2026-10-12', ajuan:8500000, cair:5000000, status:'berjalan' },
-    { id:2, nama:'Seminar Kesehatan Mental', ketua:'Siti Rahma', jenis:'kolaboratif', mulai:'2026-10-16', ajuan:12000000, cair:6000000, status:'proposal_diajukan' },
-    { id:3, nama:'Bakti Sosial Desa Sehat', ketua:'Dimas Arif', jenis:'mandiri', mulai:'2026-10-25', ajuan:7500000, cair:0, status:'draft' },
-    { id:4, nama:'Lomba Inovasi Kesehatan', ketua:'Nadia Putri', jenis:'mandiri', mulai:'2026-11-05', ajuan:10000000, cair:0, status:'revisi' },
-    { id:5, nama:'Webinar Karir Kesehatan', ketua:'Rizky Maulana', jenis:'kolaboratif', mulai:'2026-11-12', ajuan:6000000, cair:3000000, status:'disetujui' }] };
+const S = { user:{ nama:'', email:'' }, ctx:0, view:'beranda', tab:'semua', q:'', orgId:null, ctxs:[], proker:[] };
 const MENU = [['Utama',[['beranda','Beranda'],['proker','Proker'],['undangan','Undangan kolaborasi'],['galeri','Galeri'],['laporan','Laporan akhir'],['struktur','Struktur dan anggota']]],
   ['Review',[['inbox','Inbox review'],['rapat','Rapat']]], ['Anggaran',[['plafon','Plafon dan anggaran'],['cair','Pencairan dan verifikasi']]],
   ['Admin',[['periode','Periode'],['akun','Akun dan penetapan'],['audit','Jejak audit']]]];
@@ -33,9 +27,7 @@ function renderShell() {
 }
 const V = {
   beranda: () => `<h1 class="t">Beranda</h1><p class="sub">Ringkasan aktivitas dari semua konteks Anda.</p>
-  <div class="card"><h3>Perlu tindakan Anda</h3><div class="g3"><div class="k er"><b>3</b>Menunggu review</div><div class="k wa"><b>2</b>Perlu dilengkapi</div><div class="k bl"><b>1</b>Undangan kolaborasi</div></div></div>
-  <div class="row2"><div class="card"><h3>Ringkasan anggaran HIMIKA</h3><div class="bar"><i style="width:42%"></i></div><p class="sub">Plafon Rp75.000.000 · Diajukan Rp48.600.000 · Cair Rp31.200.000 · Sisa Rp43.800.000</p></div>
-  <div class="card"><h3>Batas LPJ terdekat</h3><p>Pelatihan Kader Dasar <span class="chip er">2 hari</span></p><p>Seminar Kesehatan Mental <span class="chip wa">5 hari</span></p></div></div>`,
+  <div class="card"><h3>Belum ada data</h3><p class="sub">${S.ctxs.length ? 'Belum ada aktivitas, pengajuan, atau anggaran untuk konteks ini.' : 'Belum ada organisasi atau periode yang ditetapkan ke akun ini.'}</p></div>`,
   proker() {
     const f = S.proker.filter(p => (S.tab === 'semua' || p.status === S.tab) && p.nama.toLowerCase().includes(S.q.toLowerCase()));
     const tabs = [['semua','Semua'],['draft','Draft'],['proposal_diajukan','Menunggu review'],['revisi','Revisi'],['disetujui','Disetujui'],['berjalan','Berjalan']];
@@ -56,7 +48,7 @@ const V = {
   <div id="kb" hidden><label for="dk">Dana kampus proker (Rp)</label><input id="dk" type="number" min="0" value="0"><div id="ps"></div>
   <button type="button" class="btn w" id="tp">+ Tambah peserta</button><p class="sub" id="tt"></p></div><p class="err" id="fe"></p>
   <div style="margin-top:16px;display:flex;gap:8px"><button class="btn s" type="button" data-go="proker">Batal</button><button class="btn">Simpan draft</button></div></form>`,
-  review: () => `<h1 class="t">Review dokumen proposal</h1><p class="sub">Seminar Kesehatan Mental · HMJ Keperawatan <span class="chip pu">Kolaboratif</span></p>
+  review: () => `<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p>`
   <div class="row2"><div class="pdf"><div>PROPOSAL KEGIATAN<br>SEMINAR KESEHATAN MENTAL</div></div><div><div class="card"><h3>Ringkasan anggaran</h3><p>Total diajukan <b>Rp12.000.000</b></p><p>HMJ Keperawatan (40%): Rp4.800.000<br>UKM Psikomotif (60%): Rp7.200.000</p></div>
   <div class="card"><h3>Komentar</h3><p><b>Andi Pratama</b><br>Mohon dicek kembali rincian transportasi.</p><label for="kk">Tulis komentar *</label><textarea id="kk" rows="3" placeholder="Berikan komentar atau catatan"></textarea><p class="err" id="ke"></p>
   <div style="display:flex;gap:8px;margin-top:10px"><button class="btn d" data-act="revisi">Minta revisi</button><button class="btn w" data-act="teruskan">Teruskan</button><button class="btn" data-act="setuju">Setujui</button></div></div></div></div>`
