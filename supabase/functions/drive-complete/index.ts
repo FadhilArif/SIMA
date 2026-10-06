@@ -12,9 +12,27 @@ export default {
 
       const { data: p } = await ctx.supabaseAdmin.from("proker").select("id,organisasi_id").eq("id", proker_id).maybeSingle();
       if (!p) return json({ error: "Proker tidak ditemukan." }, 404);
-      const { data: member } = await ctx.supabaseAdmin.from("keanggotaan").select("id").eq("akun_id", ctx.user.id).eq("organisasi_id", p.organisasi_id).eq("status","aktif").maybeSingle();
-      const { data: profile } = await ctx.supabaseAdmin.from("profiles").select("tipe").eq("id", ctx.user.id).maybeSingle();
-      if (!member && !["admin","wakil_rektor"].includes(profile?.tipe || "")) return json({ error: "Tidak berwenang." }, 403);
+      const { data: member } = await ctx.supabaseAdmin
+        .from("keanggotaan")
+        .select("id,jabatan")
+        .eq("akun_id", ctx.user.id)
+        .eq("organisasi_id", p.organisasi_id)
+        .eq("status","aktif")
+        .maybeSingle();
+      const { data: profile } = await ctx.supabaseAdmin
+        .from("profiles")
+        .select("tipe")
+        .eq("id", ctx.user.id)
+        .maybeSingle();
+
+      const canUploadByRole = [
+        "Presiden","Wakil Presiden","Sekretaris","Bendahara",
+        "Menteri","Ketua Divisi","Ketua","Wakil"
+      ].includes(member?.jabatan || "");
+
+      if (!canUploadByRole && !["admin","wakil_rektor"].includes(profile?.tipe || "")) {
+        return json({ error: "Tidak berwenang." }, 403);
+      }
 
       const file = await getDriveFile(drive_file_id);
       if (file.trashed) return json({ error: "Berkas Drive sudah dihapus." }, 400);
