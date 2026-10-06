@@ -13,8 +13,11 @@ SIMA MHS — Sistem Informasi dan Manajemen Organisasi Mahasiswa.
 3. Authentication → Providers: matikan public sign-up.
 4. Authentication → Providers: matikan public sign-up.
 5. Buat Admin pertama di Authentication → Users, lalu buat row `profiles` dengan `tipe='admin'`.
-6. Untuk akun awal (Wakil Rektor, Staf Keuangan, Dosen, Presiden BEM, Ketua HMJ/UKM/Club), buat user langsung di **Authentication → Users**, lalu tetapkan `profiles`, `keanggotaan`, atau `pembimbing_organisasi` melalui SQL Editor. Tidak ada Edge Function atau SMTP yang dibutuhkan untuk bootstrap akun ini.
-7. Isi `admin_operator` untuk Admin dan email pribadi operator.
+6. Untuk pendaftaran publik, aktifkan **Allow new users to sign up**. Calon pengguna mengisi email, nama, NIM, dan password dari halaman login. Akun otomatis masuk status `menunggu` sampai Admin menyetujui role dan organisasi.
+7. Admin mengelola calon pengguna melalui menu **Akun dan Penetapan**; approval menulis `profiles`, `keanggotaan`, atau `pembimbing_organisasi`.
+8. Untuk **Lupa password**, gunakan Supabase Auth `resetPasswordForEmail()` dan arahkan email Auth melalui **Send Email Hook** ke Google Apps Script. Template ada di `docs/SIMA_Auth_Email_Gateway.gs`.
+9. Untuk bootstrap manual, akun tetap bisa dibuat langsung di Authentication → Users lalu ditetapkan melalui SQL Editor.
+10. Isi `admin_operator` untuk Admin dan email pribadi operator.
 
 ## Edge Function secrets
 Jangan masukkan secret ke GitHub atau `app.js`. Supabase menyediakan secret environment untuk Edge Functions; gunakan:
