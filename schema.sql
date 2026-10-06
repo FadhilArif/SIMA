@@ -267,7 +267,7 @@ create or replace function update_profile_me(
 language plpgsql
 security definer
 set search_path=public
-as $
+as $profile$
 declare r profiles%rowtype;
 begin
   if auth.uid() is null then raise exception 'Anda belum login'; end if;
@@ -284,7 +284,7 @@ begin
 
   if not found then raise exception 'Profil belum tersedia'; end if;
   return r;
-end $;
+end $profile$;
 
 revoke all on function update_profile_me(text,text,text,text) from public;
 grant execute on function update_profile_me(text,text,text,text) to authenticated;
@@ -294,12 +294,12 @@ returns void
 language sql
 security definer
 set search_path=public
-as $
+as $notify$
   update notifikasi
   set dibaca=true
   where akun_id=auth.uid()
     and (p_id is null or id=p_id);
-$;
+$notify$;
 
 revoke all on function tandai_notifikasi_dibaca(uuid) from public;
 grant execute on function tandai_notifikasi_dibaca(uuid) to authenticated;
