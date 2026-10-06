@@ -12,7 +12,7 @@ create table if not exists profiles (
  nim text unique, nama text not null, email text not null unique,
  tipe text not null default 'mahasiswa' check(tipe in ('mahasiswa','dosen','wakil_rektor','staf_keuangan','admin')),
  status text not null default 'aktif' check(status in ('aktif','nonaktif')),
- created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+ created_at timestamptz not null default now(), updated_at timestamptz not null default now(), foto_path text
 );
 -- Kompatibilitas database lama: pastikan schema lama memiliki kolom tipe sebelum helper RLS dibuat.
 alter table profiles add column if not exists tipe text;
@@ -255,3 +255,85 @@ drop policy if exists admin_otp_read on admin_otp;
 create policy admin_otp_read on admin_otp for select using(admin_akun_id=auth.uid());
 
 -- Penyimpanan file utama menggunakan Google Drive API. Kolom foto_kegiatan.thumb_path dipertahankan nullable hanya untuk kompatibilitas data lama; aplikasi baru tidak mengunggah file ke Supabase Storage.
+-- Profil pengguna dan notifikasi pribadi
+alter table profiles add column if not exists foto_path text;
+
+create or replace function update_profile_me(
+  p_nama text,
+  p_nim text default null,
+  p_foto_path text default null,
+  p_email text default null
+) returns profiles
+language plpgsql
+security definer
+set search_path=public
+as $
+declare r profiles%rowtype;
+begin
+  if auth.uid() is null then raise exception 'Anda belum login'; end if;
+  if length(trim(coalesce(p_nama,'')))=0 then raise exception 'Nama wajib diisi'; end if;
+
+  update profiles
+  set nama=trim(p_nama),
+      nim=nullif(trim(coalesce(p_nim,''),''),
+      email=coalesce(nullif(trim(coalesce(p_email,'')),''),email),
+      foto_path=coalesce(nullif(trim(coalesce(p_foto_path,'')),''),foto_path),
+      updated_at=now()
+  where id=auth.uid()
+  returning * into r;
+
+  if not found then raise exception 'Profil belum tersedia'; end if;
+  return r;
+end $;
+
+revoke all on function update_profile_me(text,text,text,text) from public;
+grant execute on function update_profile_me(text,text,text,text) to authenticated;
+
+create or replace function tandai_notifikasi_dibaca(p_id uuid default null)
+returns void
+language sql
+security definer
+set search_path=public
+as $
+  update notifikasi
+  set dibaca=true
+  where akun_id=auth.uid()
+    and (p_id is null or id=p_id);
+$;
+
+revoke all on function tandai_notifikasi_dibaca(uuid) from public;
+grant execute on function tandai_notifikasi_dibaca(uuid) to authenticated;
+
+create index if not exists notifikasi_akun_unread_idx
+on notifikasi(akun_id,dibaca,created_at desc);
+
+-- Foto profil: bucket privat, tiap akun hanya dapat mengakses folder miliknya.
+insert into storage.buckets(id,name,public)
+values('profile-avatars','profile-avatars',false)
+on conflict(id) do update set public=false;
+
+drop policy if exists profile_avatar_select on storage.objects;
+create policy profile_avatar_select
+on storage.objects for select
+to authenticated
+using(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::text);
+
+drop policy if exists profile_avatar_insert on storage.objects;
+create policy profile_avatar_insert
+on storage.objects for insert
+to authenticated
+with check(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::text);
+
+drop policy if exists profile_avatar_update on storage.objects;
+create policy profile_avatar_update
+on storage.objects for update
+to authenticated
+using(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::text)
+with check(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::text);
+
+drop policy if exists profile_avatar_delete on storage.objects;
+create policy profile_avatar_delete
+on storage.objects for delete
+to authenticated
+using(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::text);
+
