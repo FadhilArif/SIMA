@@ -336,3 +336,80 @@ on storage.objects for delete
 to authenticated
 using(bucket_id='profile-avatars' and (storage.foldername(name))[1]=auth.uid()::text);
 
+
+
+-- ====== SIMA AUTH REGISTRATION / ADMIN APPROVAL ======
+-- Calon pengguna dapat mendaftar sendiri. Mereka masuk ruang tunggu
+-- sampai Admin menetapkan role/organisasi.
+alter table public.profiles
+  drop constraint if exists profiles_status_check;
+
+alter table public.profiles
+  add constraint profiles_status_check
+  check(status in ('menunggu','aktif','nonaktif','ditolak'));
+
+create or replace function public.buat_profil()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+begin
+  insert into public.profiles(
+    id,
+    nim,
+    nama,
+    email,
+    tipe,
+    status
+  )
+  values(
+    new.id,
+    nullif(new.raw_user_meta_data->>'nim',''),
+    coalesce(nullif(new.raw_user_meta_data->>'nama',''), split_part(coalesce(new.email,''),'@',1)),
+    new.email,
+    'mahasiswa',
+    'menunggu'
+  )
+  on conflict(id) do update
+  set
+    email=excluded.email,
+    nama=coalesce(nullif(public.profiles.nama,''),excluded.nama),
+    nim=coalesce(public.profiles.nim,excluded.nim),
+    updated_at=now();
+
+  return new;
+end;
+$$;
+
+drop trigger if exists t_profil on auth.users;
+create trigger t_profil
+after insert on auth.users
+for each row
+execute function public.buat_profil();
+
+drop policy if exists profiles_admin_update on public.profiles;
+create policy profiles_admin_update
+on public.profiles
+for update
+to authenticated
+using(lihat_semua())
+with check(lihat_semua());
+
+drop policy if exists keanggotaan_admin_write on public.keanggotaan;
+create policy keanggotaan_admin_write
+on public.keanggotaan
+for all
+to authenticated
+using(lihat_semua())
+with check(lihat_semua());
+
+drop policy if exists pembimbing_admin_write on public.pembimbing_organisasi;
+create policy pembimbing_admin_write
+on public.pembimbing_organisasi
+for all
+to authenticated
+using(lihat_semua())
+with check(lihat_semua());
+
+-- ==============================================================
