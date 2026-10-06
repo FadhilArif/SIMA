@@ -166,7 +166,7 @@ function renderShell() {
   const displayName=S.user?.user_metadata?.nama||S.user?.user_metadata?.name||S.profile?.nama||S.user?.email||'User';
   const av=$('#av');
   av.textContent=S.profile?.foto_url?'':displayName.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  av.style.backgroundImage=S.profile?.foto_url?\`url("${S.profile.foto_url}")\`:'';
+  av.style.backgroundImage=S.profile?.foto_url ? 'url("'+S.profile.foto_url+'")' : '';
   av.style.backgroundSize='cover'; av.style.backgroundPosition='center';
 }
 const V = {
