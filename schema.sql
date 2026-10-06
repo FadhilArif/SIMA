@@ -575,7 +575,7 @@ create policy tautan_drive_write
 on public.tautan_drive
 for insert
 to authenticated
-with check(proker_id in(select id from public.proker where organisasi_id in(select public.pengurus_inti()) and public.organisasi_periode_aktif(organisasi_id))));
+with check(proker_id in(select id from public.proker where organisasi_id in(select public.pengurus_inti()) and public.organisasi_periode_aktif(organisasi_id)));
 
 drop policy if exists notifikasi_admin_write on public.notifikasi;
 create policy notifikasi_admin_write
