@@ -183,26 +183,227 @@ as $$ select exists(select 1 from profiles where id=auth.uid() and tipe in('admi
 create or replace function pengurus_inti() returns setof uuid language sql stable security definer set search_path=public
 as $$ select organisasi_id from keanggotaan where akun_id=auth.uid() and status='aktif'
 and jabatan in('Presiden','Wakil Presiden','Ketua','Wakil','Sekretaris','Bendahara','Menteri','Ketua Divisi') $$;
-create or replace function proses_persetujuan(p_dokumen uuid,p_keputusan text,p_komentar text)
-returns void language plpgsql security definer set search_path=public as $$
-declare d dokumen%rowtype; next_tahap text;
+create or replace function proses_persetujuan(
+  p_dokumen uuid,
+  p_keputusan text,
+  p_komentar text
+)
+returns void
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  d dokumen%rowtype;
+  o organisasi%rowtype;
+  me_tipe text;
+  current_jabatan text;
+  next_tahap text;
+  is_admin boolean;
+  is_menteri boolean := false;
+  is_koordinator boolean := false;
+  is_bph boolean := false;
+  is_pembimbing boolean := false;
 begin
- select * into d from dokumen where id=p_dokumen for update;
- if not found then raise exception 'Dokumen tidak ditemukan'; end if;
- if p_keputusan not in('teruskan','revisi','setuju') then raise exception 'Keputusan tidak valid'; end if;
- if p_keputusan='revisi' and length(trim(coalesce(p_komentar,'')))=0 then raise exception 'Komentar wajib saat meminta revisi'; end if;
- if d.organisasi_id in(select org_saya()) then raise exception 'Tidak boleh memutuskan dokumen organisasi sendiri'; end if;
- if not(d.organisasi_id in(select org_binaan()) or lihat_semua()) then raise exception 'Anda tidak berwenang pada dokumen ini'; end if;
- insert into persetujuan(dokumen_id,tahap,keputusan,komentar,oleh) values(p_dokumen,d.tahap_saat_ini,p_keputusan,p_komentar,auth.uid());
- if p_keputusan='revisi' then update dokumen set status='revisi' where id=p_dokumen;
- elsif p_keputusan='setuju' then
-   if d.tahap_saat_ini<>'pembimbing' then raise exception 'Persetujuan akhir hanya pada tahap pembimbing'; end if;
-   update dokumen set status='disetujui' where id=p_dokumen;
- else
-   next_tahap=case d.tahap_saat_ini when 'menteri' then 'koordinator' when 'koordinator' then 'bph' when 'bph' then 'pembimbing' else 'pembimbing' end;
-   update dokumen set tahap_saat_ini=next_tahap,status=case when next_tahap='pembimbing' then 'diajukan_pembimbing' else 'diajukan' end where id=p_dokumen;
- end if;
-end $$;
+  if auth.uid() is null then
+    raise exception 'Anda belum login';
+  end if;
+
+  select * into d
+  from dokumen
+  where id=p_dokumen
+  for update;
+
+  if not found then
+    raise exception 'Dokumen tidak ditemukan';
+  end if;
+
+  if p_keputusan not in('teruskan','revisi','setuju') then
+    raise exception 'Keputusan tidak valid';
+  end if;
+
+  if p_keputusan='revisi'
+     and length(trim(coalesce(p_komentar,'')))=0 then
+    raise exception 'Komentar wajib saat meminta revisi';
+  end if;
+
+  select * into o
+  from organisasi
+  where id=d.organisasi_id;
+
+  if not found then
+    raise exception 'Organisasi dokumen tidak ditemukan';
+  end if;
+
+  select tipe into me_tipe
+  from profiles
+  where id=auth.uid();
+
+  is_admin := coalesce(me_tipe,'') in('admin','wakil_rektor');
+
+  -- Tidak boleh menilai organisasi sendiri.
+  if d.organisasi_id in(select org_saya()) and not is_admin then
+    raise exception 'Tidak boleh memutuskan dokumen organisasi sendiri';
+  end if;
+
+  -- Hak per tahap mengikuti jalur organisasi.
+  select exists(
+    select 1
+    from keanggotaan k
+    join unit_kerja u on u.id=k.unit_id
+    where k.akun_id=auth.uid()
+      and k.status='aktif'
+      and k.jabatan='Menteri'
+      and u.id=o.kementerian_id
+  ) into is_menteri;
+
+  select exists(
+    select 1
+    from penugasan_koordinator k
+    where k.akun_id=auth.uid()
+      and k.status='aktif'
+      and k.organisasi_id=d.organisasi_id
+  ) into is_koordinator;
+
+  select exists(
+    select 1
+    from keanggotaan k
+    join organisasi b on b.id=k.organisasi_id
+    where k.akun_id=auth.uid()
+      and k.status='aktif'
+      and b.tipe='BEM'
+      and k.jabatan in('Presiden','Wakil Presiden','Sekretaris','Bendahara')
+  ) into is_bph;
+
+  select exists(
+    select 1
+    from pembimbing_organisasi p
+    where p.akun_id=auth.uid()
+      and p.status='aktif'
+      and p.organisasi_id=d.organisasi_id
+  ) into is_pembimbing;
+
+  -- Wakil Rektor adalah pembimbing jalur BEM.
+  if me_tipe='wakil_rektor' and o.tipe='BEM' then
+    is_pembimbing := true;
+  end if;
+
+  if not is_admin then
+    if d.tahap_saat_ini='menteri' and not is_menteri then
+      raise exception 'Tahap Menteri hanya dapat diputuskan Menteri pengampu';
+    elsif d.tahap_saat_ini='koordinator' and not is_koordinator then
+      raise exception 'Tahap Koordinator hanya dapat diputuskan Koordinator';
+    elsif d.tahap_saat_ini='bph' and not is_bph then
+      raise exception 'Tahap BPH hanya dapat diputuskan Presiden atau BPH';
+    elsif d.tahap_saat_ini='pembimbing' and not is_pembimbing then
+      raise exception 'Tahap Pembimbing hanya dapat diputuskan Pembimbing organisasi';
+    end if;
+  end if;
+
+  insert into persetujuan(
+    dokumen_id,tahap,keputusan,komentar,oleh
+  )
+  values(
+    d.id,d.tahap_saat_ini,p_keputusan,p_komentar,auth.uid()
+  );
+
+  if p_keputusan='revisi' then
+    update dokumen
+    set status='revisi'
+    where id=d.id;
+
+  elsif p_keputusan='setuju' then
+    if d.tahap_saat_ini<>'pembimbing' then
+      raise exception 'Persetujuan akhir hanya pada tahap pembimbing';
+    end if;
+
+    update dokumen
+    set status='disetujui'
+    where id=d.id;
+
+  else
+    next_tahap :=
+      case d.tahap_saat_ini
+        when 'menteri' then 'koordinator'
+        when 'koordinator' then 'bph'
+        when 'bph' then 'pembimbing'
+        else 'pembimbing'
+      end;
+
+    -- Bila Menteri dan Koordinator adalah orang yang sama,
+    -- gabungkan kedua tahap dan catat keduanya.
+    if d.tahap_saat_ini='menteri'
+       and exists(
+         select 1
+         from penugasan_koordinator pc
+         join keanggotaan km
+           on km.akun_id=pc.akun_id
+          and km.status='aktif'
+          and km.jabatan='Menteri'
+         join unit_kerja u
+           on u.id=km.unit_id
+         where pc.organisasi_id=d.organisasi_id
+           and pc.status='aktif'
+           and pc.akun_id=auth.uid()
+           and u.id=o.kementerian_id
+       ) then
+      insert into persetujuan(
+        dokumen_id,tahap,keputusan,komentar,oleh
+      )
+      values(
+        d.id,'koordinator','teruskan','Tahap Koordinator digabung dengan tahap Menteri.',auth.uid()
+      );
+      next_tahap:='bph';
+    end if;
+
+    update dokumen
+    set tahap_saat_ini=next_tahap,
+        status=case
+          when next_tahap='pembimbing'
+            then 'diajukan_pembimbing'
+          else 'diajukan'
+        end
+    where id=d.id;
+
+    -- Beri notifikasi kepada reviewer tahap berikutnya.
+    if next_tahap='koordinator' then
+      insert into notifikasi(akun_id,organisasi_id,pesan)
+      select akun_id,d.organisasi_id,
+             'Ada dokumen yang menunggu review tahap Koordinator.'
+      from penugasan_koordinator
+      where organisasi_id=d.organisasi_id
+        and status='aktif';
+
+    elsif next_tahap='bph' then
+      insert into notifikasi(akun_id,organisasi_id,pesan)
+      select k.akun_id,d.organisasi_id,
+             'Ada dokumen yang menunggu review tahap BPH.'
+      from keanggotaan k
+      join organisasi b on b.id=k.organisasi_id
+      where b.tipe='BEM'
+        and k.status='aktif'
+        and k.jabatan in('Presiden','Wakil Presiden','Sekretaris','Bendahara');
+
+    elsif next_tahap='pembimbing' then
+      if o.tipe='BEM' then
+        insert into notifikasi(akun_id,organisasi_id,pesan)
+        select p.akun_id,d.organisasi_id,
+               'Ada dokumen BEM yang menunggu persetujuan Wakil Rektor.'
+        from profiles p
+        where p.tipe='wakil_rektor'
+          and p.status='aktif';
+      else
+        insert into notifikasi(akun_id,organisasi_id,pesan)
+        select p.akun_id,d.organisasi_id,
+               'Ada dokumen yang menunggu persetujuan Pembimbing.'
+        from pembimbing_organisasi p
+        where p.organisasi_id=d.organisasi_id
+          and p.status='aktif';
+      end if;
+    end if;
+  end if;
+end;
+$$;
 revoke all on function proses_persetujuan(uuid,text,text) from public;
 grant execute on function proses_persetujuan(uuid,text,text) to authenticated;
 
