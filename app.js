@@ -305,14 +305,14 @@ document.addEventListener('submit', async e => {
       er.textContent='Akun berhasil dibuat. Konfirmasi email diperlukan sebelum masuk ruang tunggu.';
       return;
     }
-    const {error:profileError}=await sb.from('profiles').upsert({
+    const {error:profileError}=await sb.from('profiles').insert({
       id:data.user.id,
       nama,
       email,
       nim,
       tipe:'mahasiswa',
       status:'menunggu'
-    },{onConflict:'id'});
+    });
     if(profileError){
       er.textContent='Akun berhasil dibuat, tetapi profil ruang tunggu gagal disimpan: '+profileError.message;
       return;
