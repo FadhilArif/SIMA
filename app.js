@@ -9,7 +9,7 @@ const S = {
   user:{ nama:'', email:'' },
   profile:{ tipe:'mahasiswa' },
   ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
-  ctxs:[], proker:[], memberships:[], notifications:[], notificationsLoaded:false
+  ctxs:[], proker:[], memberships:[], notifications:[], notificationsLoaded:false, aaCsv:''
 };
 
 const MENU_MAP = {
@@ -315,10 +315,42 @@ Object.assign(V,{
  plafon:()=>'<h1 class="t">Plafon dan anggaran</h1><p class="sub">Pantau plafon, pengajuan, cair, dan sisa.</p><div class="card">Belum ada data anggaran.</div>',
  cair:()=>stub('Pencairan dan verifikasi'),
  periode:()=>stub('Periode'),
- akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Admin membuat akun awal dan menetapkan peran awal sebelum pimpinan mendaftarkan anggota organisasinya.</p><div class="card"><h3>Buat akun awal</h3><p id="aa-role-note" class="sub">Pilih jenis akun untuk melihat data yang diperlukan.</p><form id="aa-form" class="profile-list"><label for="aa-kind">Jenis akun</label><select id="aa-kind" required><option value="">Pilih jenis akun</option>'+accountKindOptions().map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select><label>Nama lengkap</label><input id="aa-nama" required placeholder="Nama orang yang diberi akun"><div id="aa-nim-wrap" hidden><label>NIM</label><input id="aa-nim" placeholder="Contoh: 22.0.A.1628"></div><label>Email</label><input id="aa-email" type="email" required placeholder="email@stikesmhk.ac.id"><div id="aa-org-wrap" hidden><label>Organisasi / penugasan</label><select id="aa-org"><option value="">Pilih organisasi</option></select></div><p id="aa-error" class="err"></p><button class="btn" type="submit">Buat akun & kirim kredensial</button></form></div><div class="card"><h3>Akun yang sudah dibuat</h3><div id="aa-list" class="profile-list"><p class="sub">Memuat...</p></div></div>', audit:()=>stub('Jejak audit'),
+ akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Admin membuat akun awal dan menetapkan peran awal sebelum pimpinan mendaftarkan anggota organisasinya.</p><div class="card"><div class="tabs"><button class="on" id="aa-tab-manual" type="button">Buat manual</button><button id="aa-tab-csv" type="button">Via CSV</button></div><div id="aa-manual"><p id="aa-role-note" class="sub">Pilih jenis akun untuk melihat data yang diperlukan.</p><form id="aa-form" class="profile-list"><label for="aa-kind">Jenis akun</label><select id="aa-kind" required><option value="">Pilih jenis akun</option>'+accountKindOptions().map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select><label>Nama lengkap</label><input id="aa-nama" required placeholder="Nama orang yang diberi akun"><div id="aa-nim-wrap" hidden><label>NIM</label><input id="aa-nim" placeholder="Contoh: 22.0.A.1628"></div><label>Email</label><input id="aa-email" type="email" required placeholder="email@stikesmhk.ac.id"><div id="aa-org-wrap" hidden><label>Organisasi / penugasan</label><select id="aa-org"><option value="">Pilih organisasi</option></select></div><p id="aa-error" class="err"></p><button class="btn" type="submit">Buat akun & kirim kredensial</button></form></div><div id="aa-csv" hidden><p class="sub">Untuk akun awal: Wakil Rektor, Staf Keuangan, Dosen Pembimbing, Presiden BEM, dan Ketua HMJ/UKM/Club.</p><button class="btn s small" id="aa-download-template" type="button">Download template CSV</button><label style="margin-top:12px">File CSV akun awal</label><input id="aa-csv-file" type="file" accept=".csv,text/csv"><p class="sub" id="aa-csv-hint">Kolom: jenis_akun,nama,nim,email,organisasi_nama,periode</p><button class="btn" id="aa-csv-preview" type="button">Preview CSV</button><p class="sub" id="aa-csv-result"></p><div id="aa-csv-actions" hidden style="margin-top:12px"><button class="btn" id="aa-csv-commit" type="button">Buat semua akun</button></div></div></div><div class="card"><h3>Akun yang sudah dibuat</h3><div id="aa-list" class="profile-list"><p class="sub">Memuat...</p></div></div>', audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
+ if(e.target.id==='aa-tab-manual'){
+   $('#aa-manual').hidden=false; $('#aa-csv').hidden=true; e.target.classList.add('on'); $('#aa-tab-csv')?.classList.remove('on'); return;
+ }
+ if(e.target.id==='aa-tab-csv'){
+   $('#aa-manual').hidden=true; $('#aa-csv').hidden=false; e.target.classList.add('on'); $('#aa-tab-manual')?.classList.remove('on'); return;
+ }
+ if(e.target.id==='aa-download-template'){
+   const csv='jenis_akun,nama,nim,email,organisasi_nama,periode\nwakil_rektor,,,wakil@stikesmhk.ac.id,,\nstaf_keuangan,,,keuangan@stikesmhk.ac.id,,\ndosen,Nama Dosen,,dosen@stikesmhk.ac.id,HIMIKA,2026/2027\npresiden_bem,Nama Presiden,22.0.A.1628,presiden@stikesmhk.ac.id,BEM,2026/2027\nketua_organisasi,Nama Ketua,22.0.A.1629,ketua@stikesmhk.ac.id,HIMIKA,2026/2027\n';
+   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='template_akun_awal_sima.csv'; a.click(); URL.revokeObjectURL(url); return;
+ }
+ if(e.target.id==='aa-csv-preview'){
+   const file=$('#aa-csv-file')?.files?.[0], out=$('#aa-csv-result'), actions=$('#aa-csv-actions');
+   if(!file){out.textContent='Pilih file CSV terlebih dahulu.';return;}
+   try{
+     const r=await invokeFn('admin-account-csv',{action:'preview',csv:await file.text()});
+     out.textContent='Preview: '+r.valid+' valid, '+r.invalid+' bermasalah dari '+r.total+' baris.';
+     if(actions) actions.hidden=r.valid===0;
+     S.aaCsv=await file.text();
+   }catch(ex){out.textContent=ex.message||String(ex);if(actions)actions.hidden=true;}
+   return;
+ }
+ if(e.target.id==='aa-csv-commit'){
+   const out=$('#aa-csv-result'); e.target.disabled=true; e.target.textContent='Membuat akun...';
+   try{
+     const r=await invokeFn('admin-account-csv',{action:'commit',csv:S.aaCsv||''});
+     out.textContent='Selesai: '+r.created+' akun dibuat, '+r.skipped+' dilewati.';
+     loadInitialAccounts().then(rows=>{const list=$('#aa-list');if(list)list.innerHTML=rows.filter(x=>x.tipe!=='admin').map(x=>'<div class="profile-item"><b>'+esc(x.nama)+'</b><small>'+esc(x.email)+' · '+esc(roleLabel(x.tipe))+'</small></div>').join('')||'<p class="sub">Belum ada akun selain Admin.</p>';});
+   }catch(ex){out.textContent=ex.message||String(ex);}
+   finally{e.target.disabled=false;e.target.textContent='Buat semua akun';}
+   return;
+ }
+
  if(e.target.id==='bell'){
    if(!S.notificationsLoaded) await loadNotifications();
    const p=$('#notifyPanel'); if(p?.hidden) renderNotifications(); else if(p) p.hidden=true;
