@@ -41,7 +41,10 @@ export default {
         ["admin","wakil_rektor"].includes(profile?.tipe || "");
       if (!allowed) return json({ error: "Anda tidak berwenang mengunggah berkas proker ini." }, 403);
 
-      const org = await ctx.supabaseAdmin.from("organisasi").select("id,nama,periode_id,periode:periode_id(nama)").eq("id", p.organisasi_id).single();
+      const org = await ctx.supabaseAdmin.from("organisasi").select("id,nama,periode_id,periode:periode_id(nama,status)").eq("id", p.organisasi_id).single();
+      if (org.data?.periode?.status === "ditutup") {
+        return json({ error: "Periode sudah ditutup; berkas tidak dapat diubah." }, 403);
+      }
       const periodName = org.data?.periode?.nama || "Periode";
       const orgName = org.data?.nama || "Organisasi";
       const folder = await ensureFolderPath([periodName, orgName, p.nama, kind === "document" ? "Dokumen" : "Foto"]);
