@@ -89,3 +89,15 @@ The source design document explicitly records several modules as still being fra
 - Multi-account RLS acceptance testing in the live project
 
 This distinction is intentional: a module that currently renders a stub is not called "working" merely because the navigation button exists.
+
+
+## Additional fixes applied after initial audit
+
+- Registration login backfills a missing `profiles` row into `menunggu`, so email-confirmation environments do not strand Auth users without a profile.
+- Approval notifications now have an explicit Admin insert RLS policy.
+- Collaboration invitations are now loaded from `proker_kolaborator`; acceptance/rejection status and comments are persisted.
+- Admin structure write policies for `periode`, `organisasi`, and `unit_kerja` were added as a separate production migration.
+- Proker search now matches both program name and Ketua.
+- LPJ late submissions are marked `diajukan_terlambat`.
+- Drive upload and completion checks now reject closed periods and restrict upload roles to organizational officers/Admin/Wakil Rektor.
+- Collaborative proker participants are persisted instead of remaining only in the browser.
