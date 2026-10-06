@@ -440,6 +440,8 @@ drop policy if exists organisasi_read on organisasi; create policy organisasi_re
 
 drop policy if exists organisasi_write on organisasi; create policy organisasi_write on organisasi for all to authenticated using(lihat_semua()) with check(lihat_semua());
 drop policy if exists unit_read on unit_kerja; create policy unit_read on unit_kerja for select using(auth.uid() is not null);
+
+drop policy if exists unit_write on unit_kerja; create policy unit_write on unit_kerja for all to authenticated using(lihat_semua()) with check(lihat_semua());
 drop policy if exists keanggotaan_read on keanggotaan; create policy keanggotaan_read on keanggotaan for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
 drop policy if exists koordinator_read on penugasan_koordinator; create policy koordinator_read on penugasan_koordinator for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
 drop policy if exists pembimbing_read on pembimbing_organisasi; create policy pembimbing_read on pembimbing_organisasi for select using(akun_id=auth.uid() or organisasi_id in(select org_saya()) or lihat_semua());
