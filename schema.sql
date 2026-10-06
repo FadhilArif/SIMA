@@ -285,8 +285,8 @@ begin
   return r;
 end $profile$;
 
-revoke all on function update_profile_me(text,text,text,text) from public;
-grant execute on function update_profile_me(text,text,text,text) to authenticated;
+revoke all on function update_profile_me(text,text,text) from public;
+grant execute on function update_profile_me(text,text,text) to authenticated;
 
 create or replace function tandai_notifikasi_dibaca(p_id uuid default null)
 returns void
