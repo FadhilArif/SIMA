@@ -60,6 +60,26 @@ to authenticated
 with check(public.lihat_semua());
 
 
+create or replace function public.pengurus_inti()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path=public
+as $
+  select organisasi_id
+  from public.keanggotaan
+  where akun_id=auth.uid()
+    and status='aktif'
+    and jabatan in(
+      'Presiden','Wakil Presiden','Ketua','Wakil',
+      'Sekretaris','Bendahara','Menteri','Ketua Divisi'
+    );
+$;
+
+revoke all on function public.pengurus_inti() from public;
+grant execute on function public.pengurus_inti() to authenticated;
+
 create or replace function public.organisasi_periode_aktif(p_organisasi uuid)
 returns boolean
 language sql
