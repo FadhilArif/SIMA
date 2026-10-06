@@ -261,8 +261,7 @@ alter table profiles add column if not exists foto_path text;
 create or replace function update_profile_me(
   p_nama text,
   p_nim text default null,
-  p_foto_path text default null,
-  p_email text default null
+  p_foto_path text default null
 ) returns profiles
 language plpgsql
 security definer
@@ -276,7 +275,7 @@ begin
   update profiles
   set nama=trim(p_nama),
       nim=nullif(trim(coalesce(p_nim,'')),''),
-      email=coalesce(nullif(trim(coalesce(p_email,'')),''),email),
+      email=(select email from auth.users where id=auth.uid()),
       foto_path=coalesce(nullif(trim(coalesce(p_foto_path,'')),''),foto_path),
       updated_at=now()
   where id=auth.uid()
