@@ -347,13 +347,87 @@ document.addEventListener('submit', async e => {
   if (e.target.id === 'fl') { e.preventDefault();
     if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); await loadNotifications(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.profile?.status==='menunggu') S.view='menunggu'; else if(S.profile?.status==='ditolak') S.view='ditolak'; else if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
-  if (e.target.id === 'ff') { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), kolab = f.pengajuan === 'kolaboratif', er = [];
-    if (!f.nama) er.push('Nama program kerja wajib diisi'); if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi'); if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai'); if (!f.tempat) er.push('Lokasi wajib diisi');
-    if (kolab && !document.querySelector('.peserta input').value) er.push('Tambahkan minimal satu organisasi peserta'); if (kolab && !hitung()) er.push('Total porsi peserta melebihi dana kampus proker');
-    $('#fe').textContent = er.join('. '); if (er.length) return;
-    if (sb) { const { error } = await sb.from('proker').insert({ organisasi_id:S.orgId, nama:f.nama, jenis:f.jenis, tanggal_mulai:f.mulai, tanggal_selesai:f.selesai, tempat:f.tempat, deskripsi:f.deskripsi, pengajuan:f.pengajuan }); if (error) return toast(error.message); await loadProker(); }
-    else S.proker.unshift({ id:Date.now(), nama:f.nama, ketua:S.user.nama, jenis:f.pengajuan, mulai:f.mulai, ajuan:0, cair:0, status:'draft' });
-    toast('Draft proker tersimpan'); S.view = 'proker'; render(); }
+  if (e.target.id === 'ff') {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    const kolab = f.pengajuan === 'kolaboratif';
+    const er = [];
+
+    if (!f.nama) er.push('Nama program kerja wajib diisi');
+    if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi');
+    if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai');
+    if (!f.tempat) er.push('Lokasi wajib diisi');
+
+    const peserta=[...document.querySelectorAll('.peserta')].map(row=>({
+      nama:row.querySelector('input[aria-label="Organisasi peserta"]')?.value.trim()||'',
+      porsi:Number(row.querySelector('input[aria-label="Porsi plafon"]')?.value||0)
+    })).filter(x=>x.nama);
+
+    if (kolab && !peserta.length) er.push('Tambahkan minimal satu organisasi peserta');
+    if (kolab && peserta.some(x=>x.nama===currentContext().org)) er.push('Organisasi penyelenggara tidak boleh menjadi peserta kolaborasi');
+    if (kolab && !hitung()) er.push('Total porsi peserta melebihi dana kampus proker');
+
+    $('#fe').textContent=er.join('. ');
+    if(er.length) return;
+
+    if(sb){
+      let prokerId=null;
+      try{
+        const {data:p,error}=await sb.from('proker').insert({
+          organisasi_id:S.orgId,
+          nama:f.nama,
+          jenis:f.jenis,
+          tanggal_mulai:f.mulai,
+          tanggal_selesai:f.selesai,
+          tempat:f.tempat,
+          deskripsi:f.deskripsi,
+          pengajuan:f.pengajuan,
+          ketua_pelaksana:S.user.id
+        }).select('id').single();
+
+        if(error) throw error;
+        prokerId=p.id;
+
+        if(kolab && peserta.length){
+          const {data:orgs,error:oe}=await sb.from('organisasi')
+            .select('id,nama,periode_id,periode:periode_id(id,nama)')
+            .eq('aktif',true);
+
+          if(oe) throw oe;
+
+          const period=currentContext().periode;
+          const rows=[];
+          for(const item of peserta){
+            const matches=(orgs||[]).filter(o=>
+              o.nama===item.nama &&
+              (!period || o.periode?.nama===period)
+            );
+            if(matches.length!==1) throw new Error('Organisasi peserta tidak ditemukan atau tidak unik: '+item.nama);
+            rows.push({
+              proker_id:prokerId,
+              organisasi_id:matches[0].id,
+              porsi_plafon:item.porsi,
+              status:'diundang'
+            });
+          }
+
+          const {error:ce}=await sb.from('proker_kolaborator').insert(rows);
+          if(ce) throw ce;
+        }
+
+        await loadProker();
+      }catch(ex){
+        if(prokerId) await sb.from('proker').delete().eq('id',prokerId);
+        return toast(ex.message||String(ex));
+      }
+    }else{
+      S.proker.unshift({id:Date.now(),nama:f.nama,ketua:S.user.nama,jenis:f.pengajuan,mulai:f.mulai,ajuan:0,cair:0,status:'draft'});
+    }
+
+    toast('Draft proker tersimpan');
+    S.view='proker';
+    render();
+  }
 });
 
 
