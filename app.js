@@ -57,6 +57,10 @@ async function loadUserAccessContext(){
   S.profile=profileRes.data || {tipe:'mahasiswa'};
   S.memberships=membershipRes.data||[];
   S.ctxs=[];
+  if(['menunggu','ditolak'].includes(S.profile.status)){
+    S.orgId=null;
+    return;
+  }
 
   const add=(ctx)=>{
     const key=[ctx.kind,ctx.org_id||'global',ctx.peran||''].join(':');
@@ -139,6 +143,57 @@ function renderNotifications(){
 
 
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 2600); }
+function showAuthPanel(mode){
+  $('#fl').hidden=mode!=='login';
+  $('#fsu').hidden=mode!=='signup';
+  $('#frp').hidden=mode!=='forgot';
+  if(mode==='login') $('#le').textContent='';
+  if(mode==='signup') $('#sue').textContent='';
+  if(mode==='forgot') $('#rpe').textContent='';
+}
+async function loadApprovalQueue(){
+  if(S.profile?.tipe!=='admin') return;
+  const box=$('#pending-users'), orgSel=$('#approval-org-filter');
+  if(!box) return;
+  const [{data:pending,error:pe},{data:orgs,error:oe}]=await Promise.all([
+    sb.from('profiles').select('id,nama,email,nim,status,created_at').eq('status','menunggu').order('created_at',{ascending:true}),
+    sb.from('organisasi').select('id,nama,tipe,periode:periode_id(nama)').eq('aktif',true).order('nama')
+  ]);
+  if(pe){box.innerHTML='<p class="err">'+esc(pe.message)+'</p>';return;}
+  if(oe){box.innerHTML='<p class="err">'+esc(oe.message)+'</p>';return;}
+  const options=(orgs||[]).map(o=>'<option value="'+o.id+'">'+esc(o.nama)+' · '+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</option>').join('');
+  box.innerHTML=(pending||[]).map(p=>'<div class="card pending-card" data-pending="'+p.id+'"><h3>'+esc(p.nama)+'</h3><p class="sub">'+esc(p.email)+' · NIM '+esc(p.nim||'-')+'</p><div class="f2"><div><label>Role</label><select data-role><option value="mahasiswa">Mahasiswa</option><option value="dosen">Dosen</option><option value="wakil_rektor">Wakil Rektor Kemahasiswaan</option><option value="staf_keuangan">Staf Keuangan</option><option value="admin">Admin Sistem</option></select></div><div><label>Organisasi</label><select data-org><option value="">Tanpa organisasi</option>'+options+'</select></div><div><label>Jabatan</label><select data-jabatan><option>Anggota</option><option>Ketua</option><option>Wakil</option><option>Sekretaris</option><option>Bendahara</option><option>Presiden</option><option>Wakil Presiden</option><option>Menteri</option><option>Ketua Divisi</option></select></div></div><p class="err" data-pending-error></p><div style="display:flex;gap:8px;margin-top:12px"><button class="btn" type="button" data-approve-user="'+p.id+'">Setujui & tetapkan</button><button class="btn d" type="button" data-reject-user="'+p.id+'">Tolak</button></div></div>').join('')||'<div class="card"><p class="sub">Belum ada calon pengguna yang menunggu persetujuan.</p></div>';
+}
+async function approvePending(id,card){
+  const role=card.querySelector('[data-role]').value;
+  const orgId=card.querySelector('[data-org]').value||null;
+  const jabatan=card.querySelector('[data-jabatan]').value;
+  const er=card.querySelector('[data-pending-error]'); er.textContent='';
+  if(role==='mahasiswa' && !orgId){er.textContent='Mahasiswa wajib diberi organisasi.';return;}
+  if(role==='mahasiswa' && !jabatan){er.textContent='Jabatan wajib dipilih.';return;}
+  if(role==='dosen' && !orgId){er.textContent='Dosen wajib diberi organisasi pembimbing.';return;}
+  const btn=card.querySelector('[data-approve-user]'); btn.disabled=true; btn.textContent='Menyimpan...';
+  try{
+    const {error:pe}=await sb.from('profiles').update({tipe:role,status:'aktif',updated_at:new Date().toISOString()}).eq('id',id);
+    if(pe) throw pe;
+    await sb.from('keanggotaan').delete().eq('akun_id',id);
+    await sb.from('pembimbing_organisasi').delete().eq('akun_id',id);
+    if(role==='mahasiswa'){
+      const {error:e}=await sb.from('keanggotaan').insert({akun_id:id,organisasi_id:orgId,jabatan,status:'aktif',ditetapkan_oleh:S.user.id});
+      if(e) throw e;
+    }else if(role==='dosen'){
+      const {error:e}=await sb.from('pembimbing_organisasi').insert({akun_id:id,organisasi_id:orgId,status:'aktif',ditetapkan_oleh:S.user.id});
+      if(e) throw e;
+    }
+    toast('Akun disetujui dan role ditetapkan.');
+    loadApprovalQueue();
+  }catch(ex){
+    await sb.from('profiles').update({status:'menunggu'}).eq('id',id);
+    er.textContent=ex.message||String(ex);
+    btn.disabled=false; btn.textContent='Setujui & tetapkan';
+  }
+}
+
 async function loadProker() {
   if (!sb || !S.orgId) { S.proker=[]; return; }
   let q = sb.from('proker').select('id,nama,ketua_pelaksana,pengajuan,tanggal_mulai,tanggal_selesai,status,organisasi_id,item_anggaran(subtotal),pencairan_dana(jumlah)').order('tanggal_mulai'); q=q.eq('organisasi_id',S.orgId); const { data, error } = await q;
@@ -149,7 +204,8 @@ async function loadProker() {
 const chip = s => { const [t, c] = ST[s] || [s, '']; return `<span class="chip ${c}">${t}</span>`; };
 
 function renderShell() {
-  const ctx=currentContext(), menu=menuForContext(ctx);
+  const waiting=['menunggu','ditolak'].includes(S.profile?.status);
+  const ctx=currentContext(), menu=waiting ? [] : menuForContext(ctx);
   $('#nav').innerHTML = menu.map(([g,it]) => `<div class="grp">${g}</div>` + it.map(([k,t]) => `<button class="nav ${S.view===k?'on':''}" data-go="${k}">${t}</button>`).join('')).join('');
   const flat=menu.flatMap(([,it])=>it);
   const mobile=[];
@@ -163,6 +219,9 @@ function renderShell() {
     mobile.push(...flat.slice(0,5));
   }
   $('#bn').innerHTML=mobile.map(([k,t])=>`<button class="${k==='form'?'fab':S.view===k?'on':''}" data-go="${k}" aria-label="${t}">${t}</button>`).join('');
+  $('#bn').hidden=waiting;
+  $('#cx').hidden=waiting;
+  $('#bell').hidden=waiting;
   $('#cx').innerHTML=S.ctxs.map((x,i)=>`<option value="${i}" ${i===S.ctx?'selected':''}>${x.konteks||x.org+(x.peran?' · '+x.peran:'')}</option>`).join('');
   const displayName=S.user?.user_metadata?.nama||S.user?.user_metadata?.name||S.profile?.nama||S.user?.email||'User';
   const av=$('#av');
@@ -196,7 +255,7 @@ const V = {
   review: () => '<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p><div class="card">Belum ada dokumen yang perlu direview.</div>'
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
-function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); }
+function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin') loadApprovalQueue(); }
 
 function pesertaRow(reset) { const box = $('#ps'); if (!box) return; if (reset) box.innerHTML = '';
   box.insertAdjacentHTML('beforeend', `<div class="peserta"><input placeholder="Organisasi peserta" aria-label="Organisasi peserta"><input type="number" min="0" placeholder="Porsi Rp" aria-label="Porsi plafon"><button type="button" class="btn d" data-del aria-label="Hapus peserta">×</button></div>`); }
@@ -232,9 +291,49 @@ document.addEventListener('change', e => {
   }
 });
 document.addEventListener('submit', async e => {
+  if(e.target.id==='fsu'){
+    e.preventDefault();
+    const er=$('#sue'); er.textContent='';
+    const email=$('#su-email').value.trim(), nama=$('#su-nama').value.trim(), nim=$('#su-nim').value.trim(), pw=$('#su-pw').value, pw2=$('#su-pw2').value;
+    if(pw.length<8) return er.textContent='Password minimal 8 karakter.';
+    if(pw!==pw2) return er.textContent='Konfirmasi password tidak sama.';
+    const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{nama,nim}}});
+    if(error){er.textContent=error.message;return;}
+    if(data.session&&data.user){
+      S.user={...data.user,nama,nim};
+      try{await loadUserAccessContext();}catch(ex){er.textContent=ex.message||'Gagal menyiapkan ruang tunggu.';return;}
+      $('#login').hidden=true;$('#app').hidden=false;S.view=S.profile.status==='ditolak'?'ditolak':'menunggu';render();
+    }else{
+      er.textContent='Pendaftaran berhasil. Cek email untuk menyelesaikan pendaftaran jika verifikasi email diaktifkan.';
+    }
+    return;
+  }
+  if(e.target.id==='frp'){
+    e.preventDefault();
+    const er=$('#rpe'); er.textContent='';
+    const email=$('#rp-email').value.trim();
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:'https://simawa.vercel.app/?reset=1'});
+    if(error) er.textContent=error.message;
+    else er.textContent='Jika email terdaftar, tautan reset password sudah dikirim.';
+    return;
+  }
+  if(e.target.id==='reset-password-form'){
+    e.preventDefault();
+    const er=$('#reset-error');er.textContent='';
+    const a=$('#reset-pw1').value,b=$('#reset-pw2').value;
+    if(a.length<8)return er.textContent='Password minimal 8 karakter.';
+    if(a!==b)return er.textContent='Konfirmasi password tidak sama.';
+    const {error}=await sb.auth.updateUser({password:a});
+    if(error)return er.textContent=error.message;
+    await sb.auth.signOut();
+    $('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');
+    $('#le').textContent='Password berhasil diubah. Silakan login.';
+    return;
+  }
+  if(e.target.id==='fl'){ e.preventDefault();
   if (e.target.id === 'fl') { e.preventDefault();
     if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); await loadNotifications(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
-    $('#login').hidden = true; $('#app').hidden = false; if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
+    $('#login').hidden = true; $('#app').hidden = false; if(S.profile?.status==='menunggu') S.view='menunggu'; else if(S.profile?.status==='ditolak') S.view='ditolak'; else if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)), kolab = f.pengajuan === 'kolaboratif', er = [];
     if (!f.nama) er.push('Nama program kerja wajib diisi'); if (!f.mulai || !f.selesai) er.push('Tanggal mulai dan selesai wajib diisi'); if (f.selesai < f.mulai) er.push('Tanggal selesai tidak boleh sebelum tanggal mulai'); if (!f.tempat) er.push('Lokasi wajib diisi');
     if (kolab && !document.querySelector('.peserta input').value) er.push('Tambahkan minimal satu organisasi peserta'); if (kolab && !hitung()) er.push('Total porsi peserta melebihi dana kampus proker');
@@ -281,10 +380,22 @@ Object.assign(V,{
  plafon:()=>'<h1 class="t">Plafon dan anggaran</h1><p class="sub">Pantau plafon, pengajuan, cair, dan sisa.</p><div class="card">Belum ada data anggaran.</div>',
  cair:()=>stub('Pencairan dan verifikasi'),
  periode:()=>stub('Periode'),
-  akun:()=>'<h1 class="t">Akun dan penetapan</h1><p class="sub">Bootstrap akun SIMA dipisahkan dari aplikasi. Buat akun login di Supabase Authentication, lalu tetapkan profil, role, organisasi, jabatan, dan periode melalui SQL Editor.</p><div class="card"><h3>1. Buat akun login</h3><p class="sub">Buka Authentication → Users → Add user → Create new user. Centang Auto confirm user.</p><a class="btn" href="https://supabase.com/dashboard/project/vgzhkvxzzvllmricfzto/auth/users" target="_blank" rel="noopener">Buka Supabase Authentication</a></div><div class="card"><h3>2. Tetapkan role</h3><p class="sub">Setelah user dibuat, Admin menetapkan tipe profil dan keanggotaan organisasi melalui SQL Editor. Untuk bootstrap awal tidak diperlukan Edge Function, SMTP, atau Apps Script.</p></div><div class="card"><h3>3. Alur bootstrap</h3><p class="sub">Authentication → buat user → SQL Editor → profiles → keanggotaan atau pembimbing → login ke SIMA.</p></div>', audit:()=>stub('Jejak audit'),
+  menunggu:()=>'<div class="pending-box"><div class="card"><div class="pending-icon">⏳</div><h1 class="t">Menunggu persetujuan Admin</h1><p class="sub">Akunmu sudah berhasil dibuat. Saat ini kamu belum mendapatkan role dan organisasi.</p><div class="pending-meta"><div class="card"><small>Email</small><b>'+esc(S.user?.email||'-')+'</b></div><div class="card"><small>Nama</small><b>'+esc(S.profile?.nama||'-')+'</b></div><div class="card"><small>NIM</small><b>'+esc(S.profile?.nim||'-')+'</b></div></div><p class="sub" style="margin-top:18px">Silakan tunggu Admin menetapkan role dan organisasi. Setelah disetujui, kamu bisa login kembali untuk masuk ke SIMA.</p><button class="btn" id="pending-logout" type="button">Keluar</button></div></div>',
+  ditolak:()=>'<div class="pending-box"><div class="card"><div class="pending-icon">!</div><h1 class="t">Pendaftaran belum disetujui</h1><p class="sub">Admin belum menyetujui pendaftaran akun ini. Hubungi Admin Sistem untuk informasi lebih lanjut.</p><button class="btn" id="pending-logout" type="button">Keluar</button></div></div>',
+  'reset-password':()=>'<div class="pending-box"><div class="card"><h1 class="t">Buat password baru</h1><p class="sub">Masukkan password baru untuk akun SIMA MHS.</p><form id="reset-password-form"><label>Password baru</label><input id="reset-pw1" type="password" minlength="8" required><label>Ulangi password baru</label><input id="reset-pw2" type="password" minlength="8" required><p class="err" id="reset-error"></p><button class="btn" type="submit">Simpan password</button></form></div></div>',
+  akun:()=>`<h1 class="t">Akun dan penetapan</h1><p class="sub">Kelola calon pengguna yang mendaftar sendiri. Admin menetapkan role dan organisasi di sini.</p><div class="card"><h3>Calon pengguna menunggu persetujuan</h3><div id="pending-users"><p class="sub">Memuat...</p></div></div>`,
+ audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
+ if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
+ if(e.target.id==='show-forgot'){showAuthPanel('forgot');return;}
+ if(e.target.id==='back-login'||e.target.id==='back-login-2'){showAuthPanel('login');return;}
+ if(e.target.id==='pending-logout'){await sb?.auth.signOut();S.user={nama:'',email:''};S.profile={tipe:'mahasiswa',status:null};S.ctxs=[];S.orgId=null;$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
+ const approve=e.target.closest('[data-approve-user]');
+ if(approve){const card=approve.closest('[data-pending]');await approvePending(approve.dataset.approveUser,card);return;}
+ const reject=e.target.closest('[data-reject-user]');
+ if(reject){const id=reject.dataset.rejectUser;await sb.from('profiles').update({status:'ditolak',updated_at:new Date().toISOString()}).eq('id',id);toast('Pendaftaran ditolak.');loadApprovalQueue();return;}
  if(e.target.id==='bell'){
    if(!S.notificationsLoaded) await loadNotifications();
    const p=$('#notifyPanel'); if(p?.hidden) renderNotifications(); else if(p) p.hidden=true;
@@ -354,4 +465,12 @@ document.addEventListener('submit',async e=>{
  if(e.target.id==='cp'){e.preventDefault();const a=$('#newpw').value,b=$('#newpw2').value,er=$('#cpe');er.textContent='';if(a.length<8)return er.textContent='Kata sandi minimal 8 karakter.';if(a!==b)return er.textContent='Konfirmasi kata sandi tidak sama.';const {error}=await sb.auth.updateUser({password:a,user_metadata:{...S.user.user_metadata,must_change_password:false}});if(error)return er.textContent=error.message;S.user.user_metadata={...S.user.user_metadata,must_change_password:false};toast('Kata sandi berhasil diganti.');S.view='beranda';render();}
 });
 
+if(sb){
+  sb.auth.onAuthStateChange((event,session)=>{
+    if(event==='PASSWORD_RECOVERY'&&session){
+      S.user={...session.user,nama:session.user.user_metadata?.nama||session.user.email};
+      $('#login').hidden=true;$('#app').hidden=false;S.view='reset-password';render();
+    }
+  });
+}
 setInterval(()=>{ if(!$('#app')?.hidden && S.user?.id) loadNotifications(); },60000);
