@@ -86,7 +86,7 @@ create table if not exists proker_kolaborator (
 create table if not exists dokumen (
  id uuid primary key default gen_random_uuid(), organisasi_id uuid not null references organisasi(id),
  proker_id uuid references proker(id), jenis text not null check(jenis in ('proposal','lpj','laporan_akhir')),
- status text not null default 'draft', tahap_saat_ini text not null default 'menteri',
+ status text not null default 'draft', tahap_saat_ini text not null default 'menteri', catatan_pengaju text,
  created_at timestamptz not null default now()
 );
 create table if not exists dokumen_versi (
@@ -432,7 +432,7 @@ do $$ declare t text; begin
    execute format('alter table %I enable row level security',t);
  end loop; end $$;
 
-drop policy if exists profiles_read on profiles; create policy profiles_read on profiles for select using(id=auth.uid() or lihat_semua());
+drop policy if exists profiles_read on profiles; create policy profiles_read on profiles for select using(id=auth.uid() or lihat_semua() or id in(select k.akun_id from keanggotaan k where k.organisasi_id in(select org_saya())));
 drop policy if exists periode_read on periode; create policy periode_read on periode for select using(auth.uid() is not null);
 
 drop policy if exists periode_write on periode; create policy periode_write on periode for all to authenticated using(lihat_semua()) with check(lihat_semua());
@@ -654,3 +654,48 @@ using(public.lihat_semua())
 with check(public.lihat_semua());
 
 -- ==============================================================
+
+
+drop policy if exists rapat_write on rapat;
+create policy rapat_write on rapat for all to authenticated
+using(dokumen_id in(select id from dokumen where organisasi_id in(select pengurus_inti())))
+with check(dokumen_id in(select id from dokumen where organisasi_id in(select pengurus_inti())));
+
+drop policy if exists plafon_write on plafon_anggaran;
+create policy plafon_write on plafon_anggaran for all to authenticated
+using(exists(select 1 from profiles p where p.id=auth.uid() and p.tipe in('wakil_rektor','staf_keuangan') and p.status='aktif'))
+with check(exists(select 1 from profiles p where p.id=auth.uid() and p.tipe in('wakil_rektor','staf_keuangan') and p.status='aktif'));
+
+drop policy if exists pencairan_write on pencairan_dana;
+create policy pencairan_write on pencairan_dana for all to authenticated
+using(
+ exists(select 1 from proker pr where pr.id=pencairan_dana.proker_id and (
+  exists(select 1 from profiles p where p.id=auth.uid() and p.tipe='wakil_rektor' and p.status='aktif')
+  or exists(select 1 from pembimbing_organisasi pb where pb.akun_id=auth.uid() and pb.organisasi_id=pr.organisasi_id and pb.status='aktif')
+ ))
+)
+with check(
+ exists(select 1 from proker pr where pr.id=pencairan_dana.proker_id and (
+  exists(select 1 from profiles p where p.id=auth.uid() and p.tipe='wakil_rektor' and p.status='aktif')
+  or exists(select 1 from pembimbing_organisasi pb where pb.akun_id=auth.uid() and pb.organisasi_id=pr.organisasi_id and pb.status='aktif')
+ ))
+);
+
+drop policy if exists realisasi_write on realisasi;
+create policy realisasi_write on realisasi for all to authenticated
+using(
+ exists(select 1 from proker pr where pr.id=realisasi.proker_id and (
+  exists(select 1 from profiles p where p.id=auth.uid() and p.tipe='wakil_rektor' and p.status='aktif')
+  or exists(select 1 from pembimbing_organisasi pb where pb.akun_id=auth.uid() and pb.organisasi_id=pr.organisasi_id and pb.status='aktif')
+ ))
+)
+with check(
+ exists(select 1 from proker pr where pr.id=realisasi.proker_id and (
+  exists(select 1 from profiles p where p.id=auth.uid() and p.tipe='wakil_rektor' and p.status='aktif')
+  or exists(select 1 from pembimbing_organisasi pb where pb.akun_id=auth.uid() and pb.organisasi_id=pr.organisasi_id and pb.status='aktif')
+ ))
+);
+
+drop policy if exists notifikasi_update_self on notifikasi;
+create policy notifikasi_update_self on notifikasi for update to authenticated
+using(akun_id=auth.uid()) with check(akun_id=auth.uid());
