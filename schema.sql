@@ -14,6 +14,14 @@ create table if not exists profiles (
  status text not null default 'aktif' check(status in ('aktif','nonaktif')),
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
+-- Kompatibilitas database lama: pastikan schema lama memiliki kolom tipe sebelum helper RLS dibuat.
+alter table profiles add column if not exists tipe text;
+update profiles set tipe='mahasiswa' where tipe is null;
+alter table profiles alter column tipe set default 'mahasiswa';
+alter table profiles alter column tipe set not null;
+alter table profiles drop constraint if exists profiles_tipe_check;
+alter table profiles add constraint profiles_tipe_check check(tipe in ('mahasiswa','dosen','wakil_rektor','staf_keuangan','admin'));
+
 create table if not exists organisasi (
  id uuid primary key default gen_random_uuid(), periode_id uuid not null references periode(id),
  nama text not null, tipe text not null check(tipe in ('BEM','HMJ','UKM','Club')),
