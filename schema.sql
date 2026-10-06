@@ -275,7 +275,7 @@ begin
 
   update profiles
   set nama=trim(p_nama),
-      nim=nullif(trim(coalesce(p_nim,''),''),
+      nim=nullif(trim(coalesce(p_nim,'')),''),
       email=coalesce(nullif(trim(coalesce(p_email,'')),''),email),
       foto_path=coalesce(nullif(trim(coalesce(p_foto_path,'')),''),foto_path),
       updated_at=now()
