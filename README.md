@@ -5,7 +5,7 @@ SIMA MHS — Sistem Informasi dan Manajemen Organisasi Mahasiswa.
 ## Struktur
 - `index.html`, `style.css`, `app.js`: web statis desktop + mobile.
 - `schema.sql`: schema PostgreSQL + RLS + OTP admin; file utama disimpan di Google Drive API.
-- `supabase/functions/`: Edge Functions untuk Google Drive, impor anggota CSV, SMTP/OTP Admin, dan kebutuhan server-side lain. **Bootstrap akun awal tidak menggunakan Edge Function.**
+- `supabase/functions/`: Edge Functions untuk Google Drive, impor anggota CSV, dan OTP Admin. Bootstrap akun tidak memakai Edge Function. **Bootstrap akun awal tidak menggunakan Edge Function.**
 
 ## Setup Supabase
 1. Buat/siapkan project Supabase.
@@ -24,12 +24,6 @@ Jangan masukkan secret ke GitHub atau `app.js`. Supabase menyediakan secret envi
 - `GOOGLE_CLIENT_EMAIL`
 - `GOOGLE_PRIVATE_KEY`
 - `GOOGLE_DRIVE_ROOT_FOLDER_ID`
-- `SMTP_HOSTNAME`
-- `SMTP_PORT`
-- `SMTP_SECURE`
-- `SMTP_USERNAME`
-- `SMTP_PASSWORD`
-- `SMTP_FROM`
 
 Template aman ada di `supabase/functions/.env.example`.
 
@@ -54,7 +48,6 @@ supabase functions deploy drive-init
 supabase functions deploy drive-complete
 supabase functions deploy import-csv
 supabase functions deploy admin-otp
-supabase functions deploy send-smtp
 ```
 
 Jangan pernah menaruh secret/service-role key di frontend. Browser hanya memakai publishable/anon key + RLS.
