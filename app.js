@@ -20,7 +20,7 @@ const MENU_MAP = {
   pembimbing: [['Utama',[['beranda','Beranda'],['inbox','Inbox review'],['cair','Pencairan dan verifikasi'],['proker','Proker'],['galeri','Galeri']]]],
   wakil_rektor: [['Utama',[['beranda','Beranda'],['plafon','Plafon'],['cair','Anggaran & pencairan'],['inbox','Inbox tahap BEM'],['proker','Semua proker'],['galeri','Galeri pemantau'],['audit','Jejak audit']]]],
   staf_keuangan: [['Anggaran',[['plafon','Plafon'],['cair','Dashboard anggaran']]]],
-  admin: [['Admin',[['periode','Periode'],['akun','Akun dan penetapan'],['audit','Jejak audit']]]],
+  admin: [['Admin',[['periode','Periode'],['organisasi','Organisasi'],['akun','Akun dan penetapan'],['audit','Jejak audit'],['profil','Profil saya']]]],
   none: []
 };
 
@@ -152,6 +152,12 @@ function showAuthPanel(mode){
   if(mode==='login') $('#le').textContent='';
   if(mode==='signup') $('#sue').textContent='';
   if(mode==='forgot') $('#rpe').textContent='';
+}
+async function loadOrganizations(){
+  if(!sb) return;
+  const {data,error}=await sb.from('organisasi').select('id,nama,tipe,aktif,periode_id,periode:periode_id(id,nama,status)').order('nama');
+  if(error){toast('Gagal memuat organisasi: '+error.message);return;}
+  S.organizations=data||[];
 }
 async function loadApprovalQueue(){
   if(S.profile?.tipe!=='admin') return;
@@ -348,7 +354,15 @@ const V = {
   review: () => '<h1 class="t">Review dokumen proposal</h1><p class="sub">Belum ada dokumen yang perlu direview.</p><div class="card">Belum ada dokumen yang perlu direview.</div>'
 };
 function stub(t) { return `<h1 class="t">${t}</h1><p class="sub">Halaman ini mengikuti pola yang sama dan tersambung ke tabel Supabase terkait.</p><div class="card">Belum ada data untuk ditampilkan.</div>`; }
-function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin') loadApprovalQueue(); }
+function renderOrganizationList(){
+  const box=$('#org-list'); if(!box) return;
+  const rows=(S.organizations||[]).map(o=>{
+    const ps=o.periode?.status||'-';
+    return '<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:12px"><div><b>'+esc(o.nama)+'</b><div class="sub">'+esc(o.tipe)+' · '+esc(o.periode?.nama||'-')+'</div></div><span class="chip '+(o.aktif&&ps==='aktif'?'ok':'er')+'">'+(o.aktif&&ps==='aktif'?'Aktif':'Nonaktif')+'</span></div></div>';
+  }).join('');
+  box.innerHTML=rows||'<p class="sub">Belum ada organisasi. Buat organisasi pertama di formulir di atas.</p>';
+}
+function render() { renderShell(); if($('#notifyPanel')) $('#notifyPanel').hidden=true; $('#v').innerHTML = (V[S.view] || (() => stub(S.view)))(); if (S.view === 'form') pesertaRow(true); if(S.view==='akun' && S.profile?.tipe==='admin') loadApprovalQueue(); if(S.view==='organisasi'&&S.profile?.tipe==='admin') loadOrganizations().then(renderOrganizationList); }
 
 function pesertaRow(reset) { const box = $('#ps'); if (!box) return; if (reset) box.innerHTML = '';
   box.insertAdjacentHTML('beforeend', `<div class="peserta"><input placeholder="Organisasi peserta" aria-label="Organisasi peserta"><input type="number" min="0" placeholder="Porsi Rp" aria-label="Porsi plafon"><button type="button" class="btn d" data-del aria-label="Hapus peserta">×</button></div>`); }
@@ -383,7 +397,23 @@ document.addEventListener('change', e => {
     loadProker().then(()=>loadCollaborations()).then(render);
   }
 });
-document.addEventListener('submit', async e => {
+document.addEventListener('submit', async e => {{
+  if(e.target.id==='org-form'){
+    e.preventDefault();
+    const err=$('#org-error'); err.textContent='';
+    const nama=$('#org-nama').value.trim();
+    const tipe=$('#org-tipe').value;
+    const periode_id=$('#org-periode').value||null;
+    const aktif=$('#org-aktif').value==='true';
+    if(!nama||!periode_id){err.textContent='Nama dan periode wajib diisi.';return;}
+    const {error}=await sb.from('organisasi').insert({nama,tipe,periode_id,aktif});
+    if(error){err.textContent=error.message;return;}
+    await loadOrganizations();
+    toast('Organisasi berhasil dibuat.');
+    render();
+    return;
+  }
+
   if(e.target.id==='fsu'){
     e.preventDefault();
     const er=$('#sue'); er.textContent='';
@@ -562,6 +592,24 @@ Object.assign(V,{
   menunggu:()=>'<div class="pending-box"><div class="card"><div class="pending-icon">⏳</div><h1 class="t">Menunggu persetujuan Admin</h1><p class="sub">Akunmu sudah berhasil dibuat. Saat ini kamu belum mendapatkan role dan organisasi.</p><div class="pending-meta"><div class="card"><small>Email</small><b>'+esc(S.user?.email||'-')+'</b></div><div class="card"><small>Nama</small><b>'+esc(S.profile?.nama||'-')+'</b></div><div class="card"><small>NIM</small><b>'+esc(S.profile?.nim||'-')+'</b></div></div><p class="sub" style="margin-top:18px">Silakan tunggu Admin menetapkan role dan organisasi. Setelah disetujui, kamu bisa login kembali untuk masuk ke SIMA.</p><button class="btn" id="pending-logout" type="button">Keluar</button></div></div>',
   ditolak:()=>'<div class="pending-box"><div class="card"><div class="pending-icon">!</div><h1 class="t">Pendaftaran belum disetujui</h1><p class="sub">Admin belum menyetujui pendaftaran akun ini. Hubungi Admin Sistem untuk informasi lebih lanjut.</p><button class="btn" id="pending-logout" type="button">Keluar</button></div></div>',
   'reset-password':()=>'<div class="pending-box"><div class="card"><h1 class="t">Buat password baru</h1><p class="sub">Masukkan password baru untuk akun SIMA MHS.</p><form id="reset-password-form"><label>Password baru</label><input id="reset-pw1" type="password" minlength="8" required><label>Ulangi password baru</label><input id="reset-pw2" type="password" minlength="8" required><p class="err" id="reset-error"></p><button class="btn" type="submit">Simpan password</button></form></div></div>',
+  organisasi:()=>`
+    <h1 class="t">Organisasi</h1>
+    <p class="sub">Admin membuat dan mengatur BEM, HMJ, UKM, dan Club untuk setiap periode.</p>
+    <div class="card">
+      <h3>Tambah organisasi</h3>
+      <form id="org-form" class="f2">
+        <div><label>Nama organisasi</label><input id="org-nama" placeholder="Contoh: HIMIKA" required></div>
+        <div><label>Jenis</label><select id="org-tipe"><option>BEM</option><option>HMJ</option><option>UKM</option><option>Club</option></select></div>
+        <div><label>Periode</label><select id="org-periode"></select></div>
+        <div><label>Status</label><select id="org-aktif"><option value="true">Aktif</option><option value="false">Nonaktif</option></select></div>
+        <p class="err" id="org-error" style="grid-column:1/-1"></p>
+        <button class="btn" style="grid-column:1/-1">Tambah organisasi</button>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Daftar organisasi</h3>
+      <div id="org-list">Memuat...</div>
+    </div>`,
   akun:()=>`<h1 class="t">Akun dan penetapan</h1><p class="sub">Kelola calon pengguna yang mendaftar sendiri. Admin menetapkan role dan organisasi di sini.</p><div class="card"><h3>Calon pengguna menunggu persetujuan</h3><div id="pending-users"><p class="sub">Memuat...</p></div></div>`,
  audit:()=>stub('Jejak audit'),
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
