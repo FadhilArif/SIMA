@@ -15,40 +15,48 @@ export async function sendAccountEmail(input:{
     };
   }
 
-  const res = await fetch(APPS_SCRIPT_URL,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      token:SIMAWA_MAIL_TOKEN,
-      type:"sima_account",
-      name:input.name,
-      email:input.email,
-      password:input.password,
-      role:input.role,
-      loginUrl:"https://simawa.vercel.app"
-    })
-  });
+  try {
+    const res = await fetch(APPS_SCRIPT_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        token:SIMAWA_MAIL_TOKEN,
+        type:"sima_account",
+        name:input.name,
+        email:input.email,
+        password:input.password,
+        role:input.role,
+        loginUrl:"https://simawa.vercel.app"
+      })
+    });
 
-  const body=await res.text();
+    const body=await res.text();
 
-  if(!res.ok) {
+    if(!res.ok) {
+      return {
+        sent:false,
+        skipped:false,
+        reason:"Apps Script HTTP "+res.status+": "+body.slice(0,300)
+      };
+    }
+
+    let data:any={};
+    try{data=JSON.parse(body)}catch(_){}
+
+    if(data.ok===false) {
+      return {
+        sent:false,
+        skipped:false,
+        reason:data.error||"Apps Script menolak pengiriman email."
+      };
+    }
+
+    return {sent:true,skipped:false};
+  } catch(e) {
     return {
       sent:false,
       skipped:false,
-      reason:"Apps Script HTTP "+res.status+": "+body.slice(0,300)
+      reason:"Apps Script tidak dapat dihubungi: "+(e instanceof Error?e.message:String(e))
     };
   }
-
-  let data:any={};
-  try{data=JSON.parse(body)}catch(_){}
-
-  if(data.ok===false) {
-    return {
-      sent:false,
-      skipped:false,
-      reason:data.error||"Apps Script menolak pengiriman email."
-    };
-  }
-
-  return {sent:true,skipped:false};
 }
