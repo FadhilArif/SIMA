@@ -287,13 +287,6 @@ async function approvePending(id,card){
     btn.disabled=false; btn.textContent='Setujui & tetapkan';
   }
 }
-(id,card){
-  const role=card.querySelector('[data-role]').value;
-  const orgId=card.querySelector('[data-org]').value||null;
-  const jabatan=card.querySelector('[data-jabatan]').value;
-  const er=card.querySelector('[data-pending-error]'); er.textContent='';
-  if(role==='mahasiswa' && !orgId){er.textContent='Mahasiswa wajib diberi organisasi.';return;}
-  if(role==='mahasiswa' && !jabatan){er.textContent='Jabatan wajib dipilih.';return;}
 async function loadProker() {
   if (!sb || !S.orgId) { S.proker=[]; return; }
   let q = sb.from('proker').select('id,nama,ketua_pelaksana,pengajuan,tanggal_mulai,tanggal_selesai,status,organisasi_id,item_anggaran(subtotal),pencairan_dana(jumlah)').order('tanggal_mulai'); q=q.eq('organisasi_id',S.orgId); const { data, error } = await q;
