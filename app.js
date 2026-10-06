@@ -119,6 +119,7 @@ async function loadUserAccessContext(){
   }
 }
 
+async function loadCollaborations(){if(!sb||!S.orgId){S.kolabs=[];return;}const {data,error}=await sb.from('proker_kolaborator').select('proker_id,status,porsi_plafon,komentar,proker:proker_id(id,nama,organisasi:organisasi_id(id,nama))').eq('organisasi_id',S.orgId).order('proker_id');if(error)return;S.kolabs=data||[];}
 async function loadNotifications(){
   if(!sb||!S.user?.id) return;
   const {data,error}=await sb.from('notifikasi').select('id,organisasi_id,pesan,dibaca,created_at,organisasi:organisasi_id(nama)').eq('akun_id',S.user.id).order('created_at',{ascending:false}).limit(30);
@@ -475,7 +476,8 @@ Object.assign(V,{
  'change-password':()=>'<h1 class="t">Ganti kata sandi</h1><p class="sub">Akun baru wajib mengganti kata sandi sementara.</p><form id="cp" class="card"><label>Kata sandi baru</label><input id="newpw" type="password" minlength="8" required><label>Ulangi kata sandi</label><input id="newpw2" type="password" minlength="8" required><p class="err" id="cpe"></p><button class="btn" type="submit">Simpan kata sandi</button></form>'
 });
 document.addEventListener('click',async e=>{
- if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
+   const ka=e.target.closest('[data-kolab-accept]'); if(ka){const {error}=await sb.from('proker_kolaborator').update({status:'bergabung',dikonfirmasi_oleh:S.user.id,komentar:null}).eq('proker_id',ka.dataset.kolabAccept).eq('organisasi_id',S.orgId);if(error)toast(error.message);else{toast('Undangan diterima.');await loadCollaborations();render();}return;} const kr=e.target.closest('[data-kolab-reject]'); if(kr){const {error}=await sb.from('proker_kolaborator').update({status:'ditolak',dikonfirmasi_oleh:S.user.id,komentar:'Ditolak oleh organisasi peserta.'}).eq('proker_id',kr.dataset.kolabReject).eq('organisasi_id',S.orgId);if(error)toast(error.message);else{toast('Undangan ditolak.');await loadCollaborations();render();}return;}
+if(e.target.id==='show-signup'){showAuthPanel('signup');return;}
  if(e.target.id==='show-forgot'){showAuthPanel('forgot');return;}
  if(e.target.id==='back-login'||e.target.id==='back-login-2'){showAuthPanel('login');return;}
  if(e.target.id==='pending-logout'){await sb?.auth.signOut();S.user={nama:'',email:''};S.profile={tipe:'mahasiswa',status:null};S.ctxs=[];S.orgId=null;$('#app').hidden=true;$('#login').hidden=false;showAuthPanel('login');return;}
