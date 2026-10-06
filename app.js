@@ -7,6 +7,7 @@ function currentContext(){ return S.ctxs[S.ctx] || S.ctxs[0] || {kind:'none',org
 
 const S = {
   user:{ nama:'', email:'' },
+  kolabs:[],
   profile:{ tipe:'mahasiswa' },
   ctx:0, view:'beranda', tab:'semua', q:'', orgId:null,
   ctxs:[], proker:[], memberships:[], notifications:[], notificationsLoaded:false
@@ -289,7 +290,7 @@ document.addEventListener('change', e => {
     S.tab='semua';
     S.q='';
     S.proker=[];
-    loadProker().then(render);
+    loadProker().then(()=>loadCollaborations()).then(render);
   }
 });
 document.addEventListener('submit', async e => {
@@ -346,7 +347,7 @@ document.addEventListener('submit', async e => {
     return;
   }
   if (e.target.id === 'fl') { e.preventDefault();
-    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); await loadNotifications(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
+    if (sb) { const { data,error } = await sb.auth.signInWithPassword({ email:$('#em').value, password:$('#pw').value }); if (error) return $('#le').textContent = 'Email atau kata sandi salah.'; S.user={...data.user,nama:data.user.user_metadata?.nama||data.user.user_metadata?.name||data.user.email}; try { await loadUserAccessContext(); await loadNotifications(); await loadCollaborations(); } catch(ex) { return $('#le').textContent=ex.message||'Gagal memuat hak akses akun.'; } await loadProker(); }
     $('#login').hidden = true; $('#app').hidden = false; if(S.profile?.status==='menunggu') S.view='menunggu'; else if(S.profile?.status==='ditolak') S.view='ditolak'; else if(S.user?.user_metadata?.must_change_password) S.view='change-password'; render(); }
   if (e.target.id === 'ff') {
     e.preventDefault();
