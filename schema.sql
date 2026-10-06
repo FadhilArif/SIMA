@@ -356,6 +356,13 @@ for insert
 to authenticated
 with check(proker_id in(select id from public.proker where organisasi_id in(select public.pengurus_inti())));
 
+drop policy if exists notifikasi_admin_write on public.notifikasi;
+create policy notifikasi_admin_write
+on public.notifikasi
+for insert
+to authenticated
+with check(public.lihat_semua());
+
 -- ====== SIMA AUTH REGISTRATION / ADMIN APPROVAL ======
 -- Calon pengguna mendaftar dari browser setelah Supabase Auth sign-up.
 -- Frontend kemudian membuat row profiles dengan status 'menunggu'.
