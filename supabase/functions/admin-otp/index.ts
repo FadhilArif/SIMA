@@ -4,7 +4,11 @@ import { json, options } from "../_shared/http.ts";
 
 function sha256(value:string){ return crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)); }
 function hex(bytes:ArrayBuffer){ return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join(""); }
-function otp(){ return String(Math.floor(100000 + Math.random()*900000)); }
+function otp(){
+  const bytes=new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return String(100000+(bytes[0]%900000));
+}
 
 const transport = nodemailer.createTransport({
   host:Deno.env.get("SMTP_HOSTNAME")!,
