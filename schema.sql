@@ -254,23 +254,4 @@ alter table admin_otp enable row level security;
 drop policy if exists admin_otp_read on admin_otp;
 create policy admin_otp_read on admin_otp for select using(admin_akun_id=auth.uid());
 
--- Thumbnail foto: private bucket, upload hanya ke folder milik akun yang sedang login.
-insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
-values('sima-thumbnails','sima-thumbnails',false,2097152,array['image/webp','image/jpeg','image/png'])
-on conflict(id) do update set public=false,file_size_limit=2097152,allowed_mime_types=excluded.allowed_mime_types;
-
-drop policy if exists sima_thumb_insert on storage.objects;
-create policy sima_thumb_insert on storage.objects
-for insert to authenticated
-with check(
-  bucket_id='sima-thumbnails'
-  and (storage.foldername(name))[1]=auth.uid()::text
-);
-
-drop policy if exists sima_thumb_delete on storage.objects;
-create policy sima_thumb_delete on storage.objects
-for delete to authenticated
-using(
-  bucket_id='sima-thumbnails'
-  and (storage.foldername(name))[1]=auth.uid()::text
-);
+-- Penyimpanan file utama menggunakan Google Drive API. Kolom foto_kegiatan.thumb_path dipertahankan nullable hanya untuk kompatibilitas data lama; aplikasi baru tidak mengunggah file ke Supabase Storage.
