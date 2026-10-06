@@ -1,5 +1,5 @@
 :root{--p:#0B3AB5;--ps:#E8EEFF;--ink:#101540;--mu:#6B7391;--bg:#F4F6FA;--ln:#E6EAF3;--ok:#15803D;--oks:#E3F6EA;--wa:#C2570C;--was:#FFF0DC;--er:#D92D20;--ers:#FDE7E7;--pu:#6D3FE0;--pus:#EFE9FF;--gr:#EEF0F5}
-*{box-sizing:border-box}body{margin:0;font:14px/1.5 "Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+*{box-sizing:border-box}#login[hidden],#app[hidden]{display:none!important}body{margin:0;font:14px/1.5 "Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
 button,input,select,textarea{font:inherit;color:inherit}a{color:var(--p)}
 #login{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}.hero{background:linear-gradient(160deg,#1a2a6c,#0B3AB5);color:#fff;padding:48px;display:flex;flex-direction:column;justify-content:space-between}
 .hero h1{font-size:32px;margin:12px 0 4px}.box{max-width:340px;margin:auto;width:100%;padding:24px;background:#fff}.box h2{margin:0 0 4px}
